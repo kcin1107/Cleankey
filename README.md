@@ -8,8 +8,6 @@ Flip the toggle on, wipe down the keys at your leisure, flip it off. That's it.
 
 ---
 
-## Screenshots
-
 ![Cleankey demo](CleankeyDemo.gif)
 
 ---
