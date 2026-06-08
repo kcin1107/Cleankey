@@ -42,8 +42,10 @@ When your changes create orphans:
 
 The test: Every changed line should trace directly to the user's request.
 
-When changing the project structure:
-- Update the root `structure.md` in the same change so future chats have a current repository reference.
+Documentation maintenance:
+- Update `README.md` whenever a change affects setup, usage, behavior, requirements, versioning, or anything a user or maintainer would reasonably expect to find there.
+- Use `STRUCTURE.md` as the project map before exploring the codebase when it is useful for orientation.
+- Update the root `STRUCTURE.md` whenever the project structure changes, so future chats have a current repository reference.
 
 ## 4. Goal-Driven Execution
 
