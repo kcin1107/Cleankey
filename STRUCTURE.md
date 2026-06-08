@@ -6,7 +6,7 @@ Last updated: 2026-06-08
 
 **Cleankey** is a macOS menu bar utility that temporarily disables all keyboard input system-wide, useful for cleaning a keyboard without triggering unwanted key presses.
 
-- **Platform:** macOS 13.0+ (Ventura and later)
+- **Platform:** macOS 13.5+ (Ventura and later)
 - **Language:** Swift
 - **UI Framework:** SwiftUI
 - **Version:** 1.2v1
@@ -176,7 +176,7 @@ MenuBarExtra
 
 ## Build Configuration
 
-- **Minimum Deployment Target:** macOS 13.0 (for `MenuBarExtra`)
+- **Minimum Deployment Target:** macOS 13.5
 - **Architecture:** Universal (Apple Silicon + Intel)
 - **App Category:** Utilities
 - **Activation Policy:** Accessory (menu bar only)
