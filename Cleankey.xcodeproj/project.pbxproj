@@ -6,13 +6,8 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		01FC0E752FD6B2F80037D504 /* MenuPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01FC0E742FD6B2F80037D504 /* MenuPreview.swift */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXFileReference section */
 		019FCDF02F0EC88E008B81C8 /* Cleankey.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cleankey.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		01FC0E742FD6B2F80037D504 /* MenuPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuPreview.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -39,7 +34,6 @@
 			children = (
 				019FCDF22F0EC88E008B81C8 /* Cleankey */,
 				019FCDF12F0EC88E008B81C8 /* Products */,
-				01FC0E742FD6B2F80037D504 /* MenuPreview.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -125,7 +119,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				01FC0E752FD6B2F80037D504 /* MenuPreview.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

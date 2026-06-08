@@ -10,7 +10,7 @@ Flip the toggle on, wipe down the keys at your leisure, flip it off. That's it.
 
 ## Screenshots
 
-<!-- Add screenshots here -->
+![Cleankey demo](CleankeyDemo.gif)
 
 ---
 
