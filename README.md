@@ -31,7 +31,7 @@ Both can be granted in System Settings. Cleankey includes shortcuts to jump stra
 
 ## Requirements
 
-- macOS 13.5 (Ventura) or later
+- macOS 14.0 (Sonoma) or later
 - Works on Apple Silicon and Intel Macs
 
 ## Installation

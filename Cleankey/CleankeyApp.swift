@@ -92,7 +92,7 @@ struct CleankeyApp: App {
                 Divider()
                 
                 HStack {
-                    Text("v1.2v1")
+                    Text("v1.2.1")
                         .font(.body)
 
                     Spacer()
