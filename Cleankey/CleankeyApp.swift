@@ -3,6 +3,9 @@ import Cocoa
 import ApplicationServices
 import Combine
 
+/// Marketing version from the generated Info.plist, so the menu never drifts from the build.
+private let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+
 private enum PrivacyPane { case inputMonitoring, accessibility }
 
 private struct SystemSettingsOpener {
@@ -92,7 +95,7 @@ struct CleankeyApp: App {
                 Divider()
                 
                 HStack {
-                    Text("v1.2.1")
+                    Text("v\(appVersion)")
                         .font(.body)
 
                     Spacer()
@@ -189,6 +192,8 @@ final class KeyboardBlocker: ObservableObject {
 
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
+            // Invalidate the Mach port so it isn't leaked on every toggle cycle.
+            CFMachPortInvalidate(tap)
         }
         eventTap = nil
     }

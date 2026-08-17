@@ -1,15 +1,15 @@
 # Cleankey Repository Structure
 
-Last updated: 2026-06-08
+Last updated: 2026-08-17
 
 ## Project Overview
 
 **Cleankey** is a macOS menu bar utility that temporarily disables all keyboard input system-wide, useful for cleaning a keyboard without triggering unwanted key presses.
 
-- **Platform:** macOS 13.5+ (Ventura and later)
-- **Language:** Swift
+- **Platform:** macOS 14.0+ (Sonoma and later)
+- **Language:** Swift 5.0
 - **UI Framework:** SwiftUI
-- **Version:** 1.2v1
+- **Version:** 1.2.1 (`MARKETING_VERSION`)
 
 ---
 
@@ -17,48 +17,53 @@ Last updated: 2026-06-08
 
 ```text
 Cleankey/
-├── .claude/
+├── .claude/                    (gitignored)
 ├── .git/
+├── .gitignore
+├── AGENTS.md
 ├── CLAUDE.md
 ├── README.md
 ├── STRUCTURE.md
+├── CleankeyDemo.gif
 ├── Cleankey.xcodeproj/
-├── Cleankey/
-│   └── Cleankey/
-│       ├── Assets.xcassets/
-│       ├── CleankeyApp.swift
-│       └── CleankeyApp-Info.plist
-├── Products/
-│   └── Cleankey.app
-└── Releases/
+└── Cleankey/
+    ├── Assets.xcassets/
+    └── CleankeyApp.swift
 ```
 
 ### Key Files
 
-- `CLAUDE.md` — Project instructions for AI coding assistants.
+- `AGENTS.md` / `CLAUDE.md` — Project instructions for AI coding assistants. Kept byte-identical apart from the title line; edit both together.
 - `README.md` — Project overview and user-facing documentation.
 - `STRUCTURE.md` — This file: repository structure and app architecture reference.
+- `CleankeyDemo.gif` — Demo animation embedded in the README.
 - `Cleankey.xcodeproj/` — Xcode project bundle.
-- `Cleankey/Cleankey/CleankeyApp.swift` — Main SwiftUI app source (all code currently in this single file).
-- `Cleankey/Cleankey/CleankeyApp-Info.plist` — App Info.plist.
-- `Cleankey/Cleankey/Assets.xcassets/` — App asset catalog.
-- `Releases/` — Release artifacts.
+- `Cleankey/CleankeyApp.swift` — Main SwiftUI app source (all code lives in this single file).
+- `Cleankey/Assets.xcassets/` — App asset catalog (AppIcon, AccentColor).
+
+There is no checked-in `Info.plist`. The target uses `GENERATE_INFOPLIST_FILE = YES`, so the Info.plist is produced at build time from `INFOPLIST_KEY_*` build settings.
+
+`Releases/` is gitignored; release artifacts are not tracked.
 
 ---
 
 ## Code Architecture
 
-All code currently lives in `CleankeyApp.swift`.
+All code lives in `Cleankey/CleankeyApp.swift` (~251 lines).
+
+File-level `private let appVersion` reads `CFBundleShortVersionString` from the bundle for display in the menu footer.
 
 ### 1. `CleankeyApp` (SwiftUI App)
 - **Type:** `@main struct` conforming to `App`
 - **Purpose:** Main application entry point
 - **Key Features:**
-  - Uses `MenuBarExtra` for menu bar presence (macOS 13+)
+  - Uses `MenuBarExtra` for menu bar presence
   - Dynamic icon: `keyboard` (inactive) / `keyboard.fill` (active)
   - Menu bar UI with toggle switch, settings shortcuts, version, and quit button
   - 256pt fixed width menu
   - Window-style menu bar extra (`.menuBarExtraStyle(.window)`)
+  - `.onChange(of: blocker.isBlocking)` drives `startBlocking()` / `stopBlocking()`
+  - `.onAppear` requests Accessibility permission
 
 ### 2. `KeyboardBlocker` (ObservableObject)
 - **Type:** `final class` conforming to `ObservableObject`
@@ -69,9 +74,9 @@ All code currently lives in `CleankeyApp.swift`.
   - `private var runLoopSource: CFRunLoopSource?` — Run loop integration
 
 **Key Methods:**
-- `startBlocking()` — Creates CGEvent tap at HID level, intercepts all keyboard events
-- `stopBlocking()` — Removes event tap and restores normal input
-- `requestAccessibilityPermissionIfNeeded()` — Prompts for Accessibility permissions
+- `startBlocking()` — Creates CGEvent tap at HID level, intercepts all keyboard events. On failure (usually missing permissions) resets `isBlocking` to `false` on the main queue.
+- `stopBlocking()` — Removes the run loop source, disables and invalidates the tap, restoring normal input.
+- `requestAccessibilityPermissionIfNeeded()` — Prompts for Accessibility permissions via `AXIsProcessTrustedWithOptions`
 - `eventTapCallback` — Static callback that filters events (blocks keys when active)
 
 **Event Handling:**
@@ -79,11 +84,12 @@ All code currently lives in `CleankeyApp.swift`.
 - Uses `.cghidEventTap` for system-wide interception
 - Returns `nil` to drop events, `Unmanaged.passUnretained(event)` to allow through
 - Handles tap timeout/disable by re-enabling automatically
+- Mouse events are never in the mask, so pointer input always keeps working — this is how the user toggles blocking back off
 
 ### 3. `AppDelegate` (NSApplicationDelegate)
 - **Type:** `final class` conforming to `NSObject, NSApplicationDelegate`
 - **Purpose:** App lifecycle management
-- **Key Feature:** Sets activation policy to `.accessory` (no Dock icon, menu bar only)
+- **Key Feature:** Sets activation policy to `.accessory` (no Dock icon, menu bar only), reinforcing the `LSUIElement` Info.plist key
 
 ### 4. `SystemSettingsOpener` (Utility Struct)
 - **Type:** `private struct` with static methods
@@ -91,12 +97,13 @@ All code currently lives in `CleankeyApp.swift`.
 - **Supported Panes:**
   - `.inputMonitoring` — Input Monitoring settings
   - `.accessibility` — Accessibility settings
-- **Implementation:** Uses URL schemes with fallbacks for older macOS versions
+- **Implementation:** Uses `x-apple.systempreferences:` URL schemes, with a `Privacy_ListenEvent` fallback for older macOS versions
 
 ### 5. `HoverRow` (ViewModifier)
 - **Type:** `private struct` conforming to `ViewModifier`
 - **Purpose:** Adds hover effect to menu items
 - **Style:** Rounded rectangle with 15% opacity secondary color on hover
+- Applied via the `hoverRow()` helper in a `private extension View`
 
 ---
 
@@ -107,6 +114,8 @@ All code currently lives in `CleankeyApp.swift`.
 - `Cocoa` — macOS AppKit integration
 - `ApplicationServices` — CGEvent and accessibility APIs
 - `Combine` — Reactive programming (imported but not actively used)
+
+No third-party or package dependencies.
 
 ### Required Permissions
 1. **Accessibility** — Required for CGEvent tap to function
@@ -128,9 +137,11 @@ MenuBarExtra
     │   └── Button("Accessibility Settings…") [with hover effect]
     ├── Divider
     └── HStack — Footer
-        ├── Text("v1.2v1")
+        ├── Text("v\(appVersion)")
         └── Button("Quit")
 ```
+
+The footer version is read at runtime from the bundle's `CFBundleShortVersionString` via the file-level `appVersion` constant, so it tracks `MARKETING_VERSION` automatically.
 
 ---
 
@@ -168,37 +179,81 @@ MenuBarExtra
 - **Media Key Handling:** Only blocks subtype 8 (NX_SUBTYPE_AUX_CONTROL_BUTTONS)
 
 ### Memory Management
-- Uses `Unmanaged` for passing Swift objects to C callbacks
-- Properly cleans up event tap in `deinit`
+- Uses `Unmanaged` for passing Swift objects to C callbacks (`passUnretained` refcon)
+- `stopBlocking()` removes the run loop source, disables the tap, and calls `CFMachPortInvalidate` so ports are not leaked across toggle cycles
+- `deinit` calls `stopBlocking()`
 - Uses weak self references in async closures
 
 ---
 
 ## Build Configuration
 
-- **Minimum Deployment Target:** macOS 13.5
+- **Minimum Deployment Target:** macOS 14.0 (`MACOSX_DEPLOYMENT_TARGET`, mirrored to `LSMinimumSystemVersion`)
+- **Supported Platforms:** `macosx` only (`SUPPORTS_MACCATALYST = NO`)
 - **Architecture:** Universal (Apple Silicon + Intel)
+- **Bundle Identifier:** `nick.Cleankey`
 - **App Category:** Utilities
-- **Activation Policy:** Accessory (menu bar only)
+- **Activation Policy:** Accessory (menu bar only) — `INFOPLIST_KEY_LSUIElement = YES` plus the runtime `setActivationPolicy(.accessory)` call
+- **Info.plist:** Generated (`GENERATE_INFOPLIST_FILE = YES`); configure via `INFOPLIST_KEY_*` settings, not a checked-in file
+- **App Sandbox:** Enabled (`ENABLE_APP_SANDBOX = YES`), with `ENABLE_USER_SELECTED_FILES = readonly`
+- **Hardened Runtime:** Enabled
+- **Code Signing:** Automatic, Apple Development, team `56JJ9GRL32`
+
+### Building
+
+Local development build:
+
+```bash
+xcodebuild -scheme Cleankey -configuration Release -destination 'platform=macOS' build
+```
+
+### Releasing
+
+**Always archive — never ship a plain `build` output.**
+
+```bash
+xcodebuild -scheme Cleankey -configuration Release -destination 'platform=macOS' -archivePath ./Cleankey.xcarchive archive
+```
+
+Plain `xcodebuild build` injects `com.apple.security.get-task-allow` into the signed app (via the default `CODE_SIGN_INJECT_BASE_ENTITLEMENTS = YES`), regardless of configuration. That entitlement lets any process attach a debugger to the running app — unacceptable for an app that holds a system-wide keyboard event tap. Archiving strips it while keeping the sandbox entitlements.
+
+Do **not** try to fix this by setting `CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO`; that suppresses the auto-generated entitlements wholesale and silently drops the App Sandbox too.
+
+Verify before distributing:
+
+```bash
+codesign -d --entitlements - --xml Cleankey.xcarchive/Products/Applications/Cleankey.app | plutil -convert xml1 -o - -
+```
+
+Expected — sandbox present, no `get-task-allow`:
+
+```text
+com.apple.security.app-sandbox                  true
+com.apple.security.files.user-selected.read-only true
+```
+
+The `1.2` build currently in `/Applications` was shipped with `get-task-allow` present and should be replaced.
 
 ---
 
 ## Current Issues
 
-- None known after updating the target destinations to macOS.
+- None known.
 
 ---
 
 ## Version History
 
-- **v1.2v1** (current) — As documented in menu bar UI
+- **v1.2.1** (current)
+- **v1.2** — Version present in the released `/Applications` build
 
 ---
 
 ## Notes for AI Assistants
 
-- All code is currently in a single file (`CleankeyApp.swift`)
-- Project uses modern SwiftUI patterns with Swift Concurrency support
+- Read `README.md` and this file before starting any task; update both before committing (see `AGENTS.md` / `CLAUDE.md`)
+- All code is currently in a single file (`Cleankey/CleankeyApp.swift`)
+- Project uses modern SwiftUI patterns with Swift Concurrency support (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`)
 - Code follows Apple's Swift API design guidelines
 - Private types are namespaced within the file
 - View modifiers use custom extensions for reusability
