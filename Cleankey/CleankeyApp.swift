@@ -10,23 +10,20 @@ private enum PrivacyPane { case inputMonitoring, accessibility }
 
 private struct SystemSettingsOpener {
     static func open(_ pane: PrivacyPane) {
-        let candidates: [String]
+        // NSWorkspace.open() reports success for any x-apple.systempreferences URL,
+        // even when the anchor is unknown — an unknown anchor just lands on the
+        // generic Privacy & Security page. So there is no way to detect a bad anchor
+        // and fall back; it has to be correct the first time.
+        // Input Monitoring's anchor is Privacy_ListenEvent. There is no
+        // Privacy_InputMonitoring anchor.
+        let anchor: String
         switch pane {
-        case .inputMonitoring:
-            candidates = [
-                "x-apple.systempreferences:com.apple.preference.security?Privacy_InputMonitoring",
-                // Older macOS fallback name for Input Monitoring
-                "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
-            ]
-        case .accessibility:
-            candidates = [
-                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-            ]
+        case .inputMonitoring: anchor = "Privacy_ListenEvent"
+        case .accessibility: anchor = "Privacy_Accessibility"
         }
-        for str in candidates {
-            if let url = URL(string: str) {
-                if NSWorkspace.shared.open(url) { return }
-            }
+
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") {
+            NSWorkspace.shared.open(url)
         }
     }
 }
