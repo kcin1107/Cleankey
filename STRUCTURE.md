@@ -97,7 +97,8 @@ File-level `private let appVersion` reads `CFBundleShortVersionString` from the 
 - **Supported Panes:**
   - `.inputMonitoring` — Input Monitoring settings
   - `.accessibility` — Accessibility settings
-- **Implementation:** Uses `x-apple.systempreferences:` URL schemes, with a `Privacy_ListenEvent` fallback for older macOS versions
+- **Implementation:** Opens `x-apple.systempreferences:com.apple.preference.security?<anchor>`, where the anchor is `Privacy_ListenEvent` for Input Monitoring and `Privacy_Accessibility` for Accessibility.
+- **Anchor names matter:** there is no `Privacy_InputMonitoring` anchor — Input Monitoring is `Privacy_ListenEvent`. An unknown anchor does not fail; it silently opens the generic Privacy & Security page. `NSWorkspace.open()` returns `true` either way, so a bad anchor cannot be detected and no fallback chain is possible. Verify anchor names against `/System/Library/ExtensionKit/Extensions/SecurityPrivacyIntentsExtension.appex` before changing them.
 
 ### 5. `HoverRow` (ViewModifier)
 - **Type:** `private struct` conforming to `ViewModifier`
