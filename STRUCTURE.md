@@ -49,7 +49,7 @@ There is no checked-in `Info.plist`. The target uses `GENERATE_INFOPLIST_FILE = 
 
 ## Code Architecture
 
-All code lives in `Cleankey/CleankeyApp.swift` (~251 lines).
+All code lives in `Cleankey/CleankeyApp.swift` (~267 lines).
 
 File-level `private let appVersion` reads `CFBundleShortVersionString` from the bundle for display in the menu footer.
 
@@ -72,9 +72,10 @@ File-level `private let appVersion` reads `CFBundleShortVersionString` from the 
   - `@Published var isBlocking: Bool` — Current blocking state
   - `private var eventTap: CFMachPort?` — Low-level event tap
   - `private var runLoopSource: CFRunLoopSource?` — Run loop integration
+  - `@Published private(set) var failureMessage: String?` — Set when the tap cannot be created, surfaced inline in the menu; cleared on the next successful start
 
 **Key Methods:**
-- `startBlocking()` — Creates CGEvent tap at HID level, intercepts all keyboard events. On failure (usually missing permissions) resets `isBlocking` to `false` on the main queue.
+- `startBlocking()` — Creates CGEvent tap at HID level, intercepts all keyboard events. On failure (usually missing permissions) resets `isBlocking` to `false` on the main queue and sets `failureMessage`. Note `stopBlocking()` deliberately does not clear `failureMessage`: resetting `isBlocking` triggers the view's `onChange`, which calls `stopBlocking()` after the message is set, so clearing there would erase it immediately.
 - `stopBlocking()` — Removes the run loop source, disables and invalidates the tap, restoring normal input.
 - `requestAccessibilityPermissionIfNeeded()` — Prompts for Accessibility permissions via `AXIsProcessTrustedWithOptions`
 - `eventTapCallback` — Static callback that filters events (blocks keys when active)
@@ -114,7 +115,7 @@ File-level `private let appVersion` reads `CFBundleShortVersionString` from the 
 - `SwiftUI` — UI framework
 - `Cocoa` — macOS AppKit integration
 - `ApplicationServices` — CGEvent and accessibility APIs
-- `Combine` — Reactive programming (imported but not actively used)
+- `Combine` — Source of `ObservableObject` and `@Published`. The import is required: `SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES` stops SwiftUI from re-exporting them implicitly, so removing it breaks the build.
 
 No third-party or package dependencies.
 
@@ -132,6 +133,7 @@ MenuBarExtra
     ├── HStack — Title & Toggle
     │   ├── Text("Keyboard Cleaning")
     │   └── Toggle (switch style)
+    ├── Text(failureMessage) — only when the tap failed to start
     ├── Divider
     ├── VStack — Settings Buttons (4pt spacing)
     │   ├── Button("Input Monitoring Settings…") [with hover effect]
@@ -155,6 +157,7 @@ The footer version is read at runtime from the bundle's `CFBundleShortVersionStr
 - Direct links to System Settings privacy panes
 - Hover effects on menu items
 - Auto-recovery from event tap timeouts
+- Inline explanation in the menu when the event tap cannot be created (missing permissions)
 - Menu bar-only presence (no Dock icon)
 
 ### Potential Future Enhancements
@@ -196,7 +199,9 @@ The footer version is read at runtime from the bundle's `CFBundleShortVersionStr
 - **App Category:** Utilities
 - **Activation Policy:** Accessory (menu bar only) — `INFOPLIST_KEY_LSUIElement = YES` plus the runtime `setActivationPolicy(.accessory)` call
 - **Info.plist:** Generated (`GENERATE_INFOPLIST_FILE = YES`); configure via `INFOPLIST_KEY_*` settings, not a checked-in file
-- **App Sandbox:** Enabled (`ENABLE_APP_SANDBOX = YES`), with `ENABLE_USER_SELECTED_FILES = readonly`
+- **App Sandbox:** Enabled (`ENABLE_APP_SANDBOX = YES`), with `ENABLE_USER_SELECTED_FILES = NO`. The app opens no file pickers, so `com.apple.security.app-sandbox` is the only entitlement it needs.
+- **Build number:** `CURRENT_PROJECT_VERSION` must be incremented on every release; it is the `CFBundleVersion` and does not track `MARKETING_VERSION`.
+- **Platform settings:** the target is macOS-only. Do not reintroduce `INFOPLIST_KEY_UI*`, `IPHONEOS_DEPLOYMENT_TARGET`, `XROS_DEPLOYMENT_TARGET`, or `SUPPORTS_MACCATALYST` — Xcode adds them to multiplatform templates, but they are inert here.
 - **Hardened Runtime:** Enabled
 - **Code Signing:** Automatic, Apple Development, team `56JJ9GRL32`
 
@@ -229,8 +234,7 @@ codesign -d --entitlements - --xml Cleankey.xcarchive/Products/Applications/Clea
 Expected — sandbox present, no `get-task-allow`:
 
 ```text
-com.apple.security.app-sandbox                  true
-com.apple.security.files.user-selected.read-only true
+com.apple.security.app-sandbox  true
 ```
 
 The `1.2` build currently in `/Applications` was shipped with `get-task-allow` present and should be replaced.

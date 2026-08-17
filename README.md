@@ -47,6 +47,9 @@ Cleankey lives entirely in the menu bar, which means no Dock icon, no app switch
 **How do I unlock the keyboard once it's locked?**
 Click the Cleankey icon in the menu bar with your mouse or trackpad and flip the toggle off. The mouse stays fully functional while the keyboard is locked.
 
+**The toggle flips itself back off — what's wrong?**
+Cleankey couldn't create its keyboard event tap, which almost always means macOS hasn't granted it access yet. The menu explains this inline when it happens. Grant Cleankey both **Accessibility** and **Input Monitoring** using the two buttons in the menu, then flip the toggle again. After replacing the app with a new build you'll need to grant these again, and you may have to remove the old Cleankey entry from those lists first.
+
 **Does Cleankey block media and function keys too?**
 Yes. Volume, brightness, and play/pause/media keys are all blocked while cleaning mode is on, so wiping the top row won't change your settings.
 

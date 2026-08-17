@@ -1,6 +1,8 @@
 import SwiftUI
 import Cocoa
 import ApplicationServices
+// Combine provides ObservableObject and @Published; member import visibility is
+// enabled, so SwiftUI does not re-export them implicitly.
 import Combine
 
 /// Marketing version from the generated Info.plist, so the menu never drifts from the build.
@@ -67,6 +69,14 @@ struct CleankeyApp: App {
                 .padding(.vertical, 6)
                 .padding(.horizontal, 6)
 
+                if let failureMessage = blocker.failureMessage {
+                    Text(failureMessage)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 6)
+                }
+
                 Divider()
 
                 VStack(spacing: 4) {
@@ -131,6 +141,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 final class KeyboardBlocker: ObservableObject {
     @Published var isBlocking: Bool = false
 
+    /// Set when the event tap could not be created, so the menu can explain why the
+    /// toggle snapped back instead of leaving the user guessing.
+    @Published private(set) var failureMessage: String?
+
     // Event tap state
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -166,11 +180,16 @@ final class KeyboardBlocker: ObservableObject {
             callback: KeyboardBlocker.eventTapCallback,
             userInfo: refcon
         ) else {
-            // If the tap can't be created (often due to permissions), leave blocking off.
-            DispatchQueue.main.async { [weak self] in self?.isBlocking = false }
+            // The tap almost always fails because Accessibility or Input Monitoring
+            // access hasn't been granted. Turn blocking back off and say why.
+            DispatchQueue.main.async { [weak self] in
+                self?.isBlocking = false
+                self?.failureMessage = "Couldn't lock the keyboard. Grant Cleankey access below, then try again."
+            }
             return
         }
 
+        failureMessage = nil
         eventTap = tap
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
 
