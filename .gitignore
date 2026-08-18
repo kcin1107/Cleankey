@@ -2,3 +2,8 @@
 Releases/
 *.xcarchive/
 DerivedData/
+
+# Signing material. Never commit these.
+*.p12
+*.cer
+*.certSigningRequest
