@@ -327,6 +327,16 @@ Pushing a `v*` tag runs `.github/workflows/release.yml`, which performs the same
 steps documented below and attaches the zip to the GitHub release. It fails the
 build if `get-task-allow` appears in the exported app.
 
+Running the workflow manually does everything except publish: it builds, signs,
+notarizes, staples and uploads the zip as a workflow artifact, then stops. That
+rehearses the whole signing path without creating a release. The publish step is
+guarded by `startsWith(github.ref, 'refs/tags/')`, because on a manual run
+`GITHUB_REF_NAME` is the branch name, and an unguarded step would create a release
+named after it.
+
+The runner selects the highest-numbered Xcode present and prints its version, so a
+failure caused by a toolchain change is visible in the log.
+
 Four repository secrets are required (Settings > Secrets and variables > Actions):
 
 | Secret | Value |
