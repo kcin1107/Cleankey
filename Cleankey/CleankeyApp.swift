@@ -105,19 +105,19 @@ private struct HoverHighlight: ViewModifier {
     }
 }
 
-/// A settings row: plain, full width and leading aligned, with the hover highlight.
+/// A settings row: full width and leading aligned, with one shared click and hover area.
 /// Quit uses `hoverHighlight()` directly, since it sits right aligned in the footer.
-private struct SettingsRow: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .buttonStyle(.plain)
+private struct SettingsRow: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
             .modifier(HoverHighlight())
     }
 }
 
 private extension View {
-    func settingsRow() -> some View { modifier(SettingsRow()) }
+    func settingsRow() -> some View { buttonStyle(SettingsRow()) }
     func hoverHighlight() -> some View { modifier(HoverHighlight()) }
 }
 
@@ -141,33 +141,55 @@ struct CleankeyApp: App {
 
                 Divider()
 
-                ToggleRow(title: "Open at Login", isOn: loginItem.isEnabled) {
-                    loginItem.setEnabled($0)
-                }
-
-                if let message = loginItem.message {
-                    HintText(text: message)
-                }
-
-                Divider()
-
-                VStack(spacing: 4) {
-                    Button("Input Monitoring…") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Button {
                         SystemSettingsOpener.open(.inputMonitoring)
+                    } label: {
+                        HStack {
+                            Text("Input Monitoring…")
+                            Spacer()
+                            Image(systemName: blocker.hasInputMonitoringPermission ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundStyle(blocker.hasInputMonitoringPermission ? Color.green : Color.red)
+                                .imageScale(.medium)
+                                .fixedSize()
+                                .accessibilityLabel(blocker.hasInputMonitoringPermission ? "Granted" : "Not granted")
+                        }
                     }
                     .settingsRow()
 
-                    Button("\(accessibilityPaneName)…") {
+                    Button {
                         SystemSettingsOpener.open(.accessibility)
+                    } label: {
+                        HStack {
+                            Text("\(accessibilityPaneName)…")
+                                .lineLimit(1)
+                            Spacer()
+                            Image(systemName: blocker.hasAccessibilityPermission ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundStyle(blocker.hasAccessibilityPermission ? Color.green : Color.red)
+                                .imageScale(.medium)
+                                .fixedSize()
+                                .accessibilityLabel(blocker.hasAccessibilityPermission ? "Granted" : "Not granted")
+                        }
                     }
                     .settingsRow()
                 }
 
                 Divider()
 
-                Button(updates.title) { updates.act() }
-                    .settingsRow()
-                    .disabled(updates.isChecking)
+                VStack(alignment: .leading, spacing: 4) {
+                    ToggleRow(title: "Open at Login", isOn: loginItem.isEnabled) {
+                        loginItem.setEnabled($0)
+                    }
+
+                    if let message = loginItem.message {
+                        HintText(text: message)
+                    }
+
+                    Button(updates.title) { updates.act() }
+                        .foregroundStyle(updates.isInformational ? Color.secondary : Color.primary)
+                        .settingsRow()
+                        .disabled(updates.isChecking)
+                }
 
                 Divider()
 
@@ -178,7 +200,7 @@ struct CleankeyApp: App {
 
                     Spacer()
 
-                    Button("Quit") { NSApp.terminate(nil) }
+                    Button("Quit Keyclean") { NSApp.terminate(nil) }
                         .buttonStyle(.plain)
                         .font(.body)
                         .hoverHighlight()
@@ -187,6 +209,7 @@ struct CleankeyApp: App {
             .padding(8)
             .frame(width: 256)
             .onAppear {
+                blocker.refreshPermissionStatus()
                 blocker.requestPermissionsIfNeeded()
                 // The user can change this in System Settings, so re-read it
                 // every time the panel opens rather than trusting cached state.
@@ -244,6 +267,13 @@ final class UpdateChecker: ObservableObject {
     var isChecking: Bool {
         if case .checking = state { return true }
         return false
+    }
+
+    var isInformational: Bool {
+        switch state {
+        case .checking, .upToDate: return true
+        default: return false
+        }
     }
 
     /// Download when one is waiting, otherwise check — or check again, so the
@@ -328,6 +358,10 @@ final class KeyboardBlocker: ObservableObject {
     /// switch stayed off instead of leaving the user guessing.
     @Published private(set) var failureMessage: String?
 
+    /// Live preflight results shown beside the System Settings shortcuts.
+    @Published private(set) var hasAccessibilityPermission = AXIsProcessTrusted()
+    @Published private(set) var hasInputMonitoringPermission = CGPreflightListenEventAccess()
+
     // Event tap state
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -336,6 +370,7 @@ final class KeyboardBlocker: ObservableObject {
 
     /// Single entry point for the menu's switch.
     func setBlocking(_ shouldBlock: Bool) {
+        refreshPermissionStatus()
         if shouldBlock {
             startBlocking()
         } else {
@@ -420,6 +455,12 @@ final class KeyboardBlocker: ObservableObject {
     }
 
     // MARK: - Permissions
+
+    /// Re-reads both privileges because they can be changed outside the app.
+    func refreshPermissionStatus() {
+        hasAccessibilityPermission = AXIsProcessTrusted()
+        hasInputMonitoringPermission = CGPreflightListenEventAccess()
+    }
 
     /// Privileges the tap needs but doesn't have. A suppressing tap requires both:
     /// Accessibility to drop events, Input Monitoring to receive them at all.
