@@ -49,9 +49,9 @@ There is no checked-in `Info.plist`. The target uses `GENERATE_INFOPLIST_FILE = 
 
 ## Code Architecture
 
-All code lives in `Cleankey/CleankeyApp.swift` (~267 lines).
+All code lives in `Cleankey/CleankeyApp.swift` (~270 lines).
 
-File-level `private let appVersion` reads `CFBundleShortVersionString` from the bundle for display in the menu footer.
+File-level constants: `appVersion` reads `CFBundleShortVersionString` from the bundle for the menu footer; `nxSysDefinedEventType` (14) and `nxAuxControlButtonsSubtype` (8) name the system-defined event magic numbers in one place, since they are needed both when building the event mask and when filtering in the callback.
 
 ### 1. `CleankeyApp` (SwiftUI App)
 - **Type:** `@main struct` conforming to `App`
@@ -62,21 +62,23 @@ File-level `private let appVersion` reads `CFBundleShortVersionString` from the 
   - Menu bar UI with toggle switch, settings shortcuts, version, and quit button
   - 256pt fixed width menu
   - Window-style menu bar extra (`.menuBarExtraStyle(.window)`)
-  - `.onChange(of: blocker.isBlocking)` drives `startBlocking()` / `stopBlocking()`
+  - The switch binds through `blocker.setBlocking(_:)` rather than writing `isBlocking` directly
   - `.onAppear` requests Accessibility permission
 
 ### 2. `KeyboardBlocker` (ObservableObject)
 - **Type:** `final class` conforming to `ObservableObject`
 - **Purpose:** Core functionality — system-wide keyboard input blocking
 - **Key Properties:**
-  - `@Published var isBlocking: Bool` — Current blocking state
+  - `@Published private(set) var isBlocking: Bool` — Current blocking state, owned by the class so it can never report a lock that isn't installed
   - `private var eventTap: CFMachPort?` — Low-level event tap
   - `private var runLoopSource: CFRunLoopSource?` — Run loop integration
   - `@Published private(set) var failureMessage: String?` — Set when the tap cannot be created, surfaced inline in the menu; cleared on the next successful start
 
 **Key Methods:**
-- `startBlocking()` — Creates CGEvent tap at HID level, intercepts all keyboard events. On failure (usually missing permissions) resets `isBlocking` to `false` on the main queue and sets `failureMessage`. Note `stopBlocking()` deliberately does not clear `failureMessage`: resetting `isBlocking` triggers the view's `onChange`, which calls `stopBlocking()` after the message is set, so clearing there would erase it immediately.
-- `stopBlocking()` — Removes the run loop source, disables and invalidates the tap, restoring normal input.
+- `setBlocking(_:)` — Single entry point for the switch; routes to `startBlocking()` / `stopBlocking()`.
+- `startBlocking()` — Creates CGEvent tap at HID level, intercepts all keyboard events. Sets `isBlocking` to `true` only after the tap is installed; on failure (usually missing permissions) leaves it `false` and sets `failureMessage`.
+- `teardownTap()` — Private. Removes the run loop source, disables and invalidates the tap, without touching published state so `deinit` can reuse it.
+- `stopBlocking()` — Calls `teardownTap()` and sets `isBlocking` to `false`, restoring normal input.
 - `requestAccessibilityPermissionIfNeeded()` — Prompts for Accessibility permissions via `AXIsProcessTrustedWithOptions`
 - `eventTapCallback` — Static callback that filters events (blocks keys when active)
 
@@ -92,8 +94,8 @@ File-level `private let appVersion` reads `CFBundleShortVersionString` from the 
 - **Purpose:** App lifecycle management
 - **Key Feature:** Sets activation policy to `.accessory` (no Dock icon, menu bar only), reinforcing the `LSUIElement` Info.plist key
 
-### 4. `SystemSettingsOpener` (Utility Struct)
-- **Type:** `private struct` with static methods
+### 4. `SystemSettingsOpener` (Utility Namespace)
+- **Type:** `private enum` used as an uninstantiable namespace for static methods
 - **Purpose:** Opens specific System Settings privacy panes
 - **Supported Panes:**
   - `.inputMonitoring` — Input Monitoring settings
@@ -101,11 +103,11 @@ File-level `private let appVersion` reads `CFBundleShortVersionString` from the 
 - **Implementation:** Opens `x-apple.systempreferences:com.apple.preference.security?<anchor>`, where the anchor is `Privacy_ListenEvent` for Input Monitoring and `Privacy_Accessibility` for Accessibility.
 - **Anchor names matter:** there is no `Privacy_InputMonitoring` anchor — Input Monitoring is `Privacy_ListenEvent`. An unknown anchor does not fail; it silently opens the generic Privacy & Security page. `NSWorkspace.open()` returns `true` either way, so a bad anchor cannot be detected and no fallback chain is possible. Verify anchor names against `/System/Library/ExtensionKit/Extensions/SecurityPrivacyIntentsExtension.appex` before changing them.
 
-### 5. `HoverRow` (ViewModifier)
+### 5. `SettingsRow` (ViewModifier)
 - **Type:** `private struct` conforming to `ViewModifier`
-- **Purpose:** Adds hover effect to menu items
+- **Purpose:** Shared look for the two settings rows — plain button style, full width, padding, and a hover highlight — so the modifier chain is not repeated per row
 - **Style:** Rounded rectangle with 15% opacity secondary color on hover
-- Applied via the `hoverRow()` helper in a `private extension View`
+- Applied via the `settingsRow()` helper in a `private extension View`
 
 ---
 
@@ -185,7 +187,7 @@ The footer version is read at runtime from the bundle's `CFBundleShortVersionStr
 ### Memory Management
 - Uses `Unmanaged` for passing Swift objects to C callbacks (`passUnretained` refcon)
 - `stopBlocking()` removes the run loop source, disables the tap, and calls `CFMachPortInvalidate` so ports are not leaked across toggle cycles
-- `deinit` calls `stopBlocking()`
+- `deinit` calls `teardownTap()`, avoiding published-state mutation during deallocation
 - Uses weak self references in async closures
 
 ---
