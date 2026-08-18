@@ -44,16 +44,18 @@ jobs:
             echo "::error::DEVELOPER_ID_CERT_P12_BASE64 decoded to an empty file"
             exit 1
           fi
-          if ! openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -nokeys -passin pass:"$CERT_PASSWORD" -noout 2>/dev/null; then
-            echo "::error::Could not open the .p12 with DEVELOPER_ID_CERT_PASSWORD. Either that secret is wrong, or it does not match the password used when exporting the certificate."
-            exit 1
-          fi
-
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security set-keychain-settings -lut 3600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" \
-            -T /usr/bin/codesign -T /usr/bin/security
+
+          # Not validated with openssl first: Keychain Access exports .p12 files
+          # using RC2-40-CBC, which OpenSSL 3 dropped from its default provider.
+          # `security` handles it, so let it be the judge.
+          if ! security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" \
+              -T /usr/bin/codesign -T /usr/bin/security; then
+            echo "::error::Could not import the certificate. A 'MAC verification failed' above means DEVELOPER_ID_CERT_PASSWORD does not match the password used when exporting the .p12."
+            exit 1
+          fi
           # Lets codesign use the key without an interactive prompt.
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
