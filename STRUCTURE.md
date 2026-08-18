@@ -9,7 +9,7 @@ Last updated: 2026-08-18
 - **Platform:** macOS 14.0+ (Sonoma and later)
 - **Language:** Swift 5.0
 - **UI Framework:** SwiftUI
-- **Version:** 1.0 (`MARKETING_VERSION`), build 6 (`CURRENT_PROJECT_VERSION`)
+- **Version:** 1.1 (`MARKETING_VERSION`), build 7 (`CURRENT_PROJECT_VERSION`)
 
 ---
 
@@ -55,7 +55,7 @@ There is no checked-in `Info.plist`. The target uses `GENERATE_INFOPLIST_FILE = 
 
 ## Code Architecture
 
-All code lives in `Cleankey/CleankeyApp.swift` (~472 lines).
+All code lives in `Cleankey/CleankeyApp.swift` (~520 lines).
 
 `accessibilityPaneName` returns the System Settings label for the Accessibility
 pane. macOS renamed it to "Device Control and Data Access"; confirmed on macOS 27
@@ -76,7 +76,7 @@ File-level constants: `appVersion` reads `CFBundleShortVersionString` from the b
   - 256pt fixed width menu
   - Window-style menu bar extra (`.menuBarExtraStyle(.window)`)
   - The switch binds through `blocker.setBlocking(_:)` rather than writing `isBlocking` directly
-  - `.onAppear` requests both permissions
+  - `.onAppear` refreshes and requests both permissions
 
 ### 2. `KeyboardBlocker` (ObservableObject)
 - **Type:** `final class` conforming to `ObservableObject`
@@ -86,6 +86,7 @@ File-level constants: `appVersion` reads `CFBundleShortVersionString` from the b
   - `private var eventTap: CFMachPort?`: Low-level event tap
   - `private var runLoopSource: CFRunLoopSource?`: Run loop integration
   - `@Published private(set) var failureMessage: String?`: Set when the tap cannot be created, surfaced inline in the menu; cleared on the next successful start
+  - `hasAccessibilityPermission` / `hasInputMonitoringPermission`: Published preflight results shown as trailing status symbols on the two System Settings shortcuts
 
 **Key Methods:**
 - `setBlocking(_:)`: Single entry point for the switch; routes to `startBlocking()` / `stopBlocking()`.
@@ -93,6 +94,7 @@ File-level constants: `appVersion` reads `CFBundleShortVersionString` from the b
 - `teardownTap()`: Private. Removes the run loop source, disables and invalidates the tap, without touching published state so `deinit` can reuse it.
 - `stopBlocking()`: Calls `teardownTap()` and sets `isBlocking` to `false`, restoring normal input.
 - `requestPermissionsIfNeeded()`: Prompts for both privileges: Accessibility via `AXIsProcessTrustedWithOptions`, Input Monitoring via `CGRequestListenEventAccess()`. Neither takes effect until the app is relaunched.
+- `refreshPermissionStatus()`: Re-reads both preflight checks when the menu appears and whenever the cleaning switch changes, so the permission rows reflect changes made in System Settings.
 - `missingPermissions`: Private. Reports which privileges are absent, via `AXIsProcessTrusted()` and `CGPreflightListenEventAccess()`, so the failure message can name the actual cause rather than guess.
 - `eventTapCallback`: Static callback that filters events (blocks keys when active)
 
@@ -121,7 +123,7 @@ File-level constants: `appVersion` reads `CFBundleShortVersionString` from the b
 - **Purpose:** Compares the running version against the latest GitHub release
 - **Endpoint:** `https://api.github.com/repos/seafyre/Cleankey/releases/latest`, reading `tag_name` and stripping a leading `v` (release tags are `v1.2.1` style)
 - **Comparison:** `compare(_:options: .numeric)` so 1.10 sorts above 1.9
-- **State machine:** `.idle` / `.checking` / `.upToDate` / `.available(String)` / `.failed`. The row's label *is* the state, so there is no separate status line, and `act()` downloads when an update is waiting and re-checks otherwise, so the up-to-date and failed states double as retry.
+- **State machine:** `.idle` / `.checking` / `.upToDate` / `.available(String)` / `.failed`. The row's label *is* the state, so there is no separate status line. Checking and up-to-date use the secondary label color so they read as status text; `act()` downloads when an update is waiting and re-checks otherwise, so the up-to-date and failed states double as retry.
 - `reset()` runs on panel appearance so a stale result doesn't linger as the label.
 - **Installs nothing by design.** The user downloads and replaces the app. Adopting Sparkle would require bundling XPC services, `SUEnableInstallerLauncherService`, re-signing every nested binary with Developer ID, and publishing a signed appcast per release. That is too much machinery for an app that ships a few times a year.
 
@@ -134,7 +136,7 @@ File-level constants: `appVersion` reads `CFBundleShortVersionString` from the b
 - `ToggleRow`: titled switch row used by both toggles. `.controlSize(.small)`; SwiftUI's default `.regular` switch is oversized for a menu bar panel.
 - `HintText`: secondary explanatory line under a row
 - `HoverHighlight`: rounded hover highlight, shared by the settings rows **and** Quit
-- `SettingsRow`: `HoverHighlight` plus plain button style and full-width leading alignment. Quit uses `hoverHighlight()` directly, since it sits right-aligned in the footer; that split is why the two are separate modifiers.
+- `SettingsRow`: button style with full-width leading alignment and one rectangular click/hover area. Quit uses `hoverHighlight()` directly, since it sits right-aligned in the footer; that split is why the two are separate styles.
 
 ---
 
@@ -211,18 +213,19 @@ MenuBarExtra
     ├── ToggleRow("Keyboard Cleaning")
     ├── HintText(failureMessage), only when the tap failed to start
     ├── Divider
-    ├── ToggleRow("Open at Login")
-    ├── HintText(loginItem.message), only when approval is required
-    ├── Divider
     ├── VStack, Settings Buttons (4pt spacing)
-    │   ├── Button("Input Monitoring…") [hover]
-    │   └── Button("<accessibilityPaneName>…") [hover]
+    │   ├── Button("Input Monitoring…") [hover, trailing green check/red X SF Symbol]
+    │   └── Button("<accessibilityPaneName>…") [hover, trailing green check/red X SF Symbol]
     ├── Divider
-    ├── Button(updates.title) [hover], label reflects update state
+    ├── VStack, Utility Controls (4pt spacing)
+    │   ├── ToggleRow("Open at Login")
+    │   ├── HintText(loginItem.message), only when approval is required
+    │   └── Button(updates.title) [hover], label reflects update state;
+    │       checking/up-to-date use secondary foreground
     ├── Divider
     └── HStack, Footer
         ├── Text("v\(appVersion)")
-        └── Button("Quit") [hover]
+        └── Button("Quit Keyclean") [hover]
 ```
 
 The footer version is read at runtime from the bundle's `CFBundleShortVersionString` via the file-level `appVersion` constant, so it tracks `MARKETING_VERSION` automatically.
@@ -241,6 +244,7 @@ The footer version is read at runtime from the bundle's `CFBundleShortVersionStr
 - Check for Updates against GitHub Releases (notifies only; does not install)
 - Auto-recovery from event tap timeouts
 - Inline explanation in the menu when the event tap cannot be created (missing permissions)
+- Live granted/not-granted SF Symbol beside each permission shortcut
 - Menu bar-only presence (no Dock icon)
 
 ### Potential Future Enhancements
@@ -433,7 +437,9 @@ a short-lived v1.0/v1.0.1/v1.1 renumbering) were deleted, and v1.0 was republish
 the initial full release. Build numbers (`CURRENT_PROJECT_VERSION`) kept climbing
 throughout, so they stay monotonic even though the marketing version moved down.
 
-- **v1.0** (current), build 6: prevents a partially authorized event tap from
+- **v1.1** (current), build 7: adds live permission status symbols and refreshed
+  menu layout, including full-row settings actions and quieter update status text.
+- **v1.0**, build 6: prevents a partially authorized event tap from
   reporting that keyboard blocking is active. Includes keyboard blocking, Open at
   Login, update checking, and a notarized Developer ID build.
 

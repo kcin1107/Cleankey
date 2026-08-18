@@ -29,7 +29,7 @@ Working at the HID level means macOS requires two permissions:
 - **Device Control and Data Access** (called **Accessibility** on macOS 15 and earlier) lets Cleankey suppress key events
 - **Input Monitoring** lets Cleankey receive them in the first place
 
-Cleankey needs both. With either one missing it cannot block anything. You grant them in System Settings, and the menu has shortcuts that open the right pane directly.
+Cleankey needs both. With either one missing it cannot block anything. The menu shows a green checkmark or red X beside each permission and provides shortcuts that open the right System Settings pane directly.
 
 ## Requirements
 
