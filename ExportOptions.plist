@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Sign the exported app with Developer ID so it passes Gatekeeper once
+	     notarized. The target itself stays on Apple Development, so local builds
+	     and Xcode's Run button are unaffected. -->
+	<key>method</key>
+	<string>developer-id</string>
+	<key>teamID</key>
+	<string>56JJ9GRL32</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<!-- Export to disk; notarization is a separate notarytool step so the
+	     submission log is visible when it fails. -->
+	<key>destination</key>
+	<string>export</string>
+</dict>
+</plist>
