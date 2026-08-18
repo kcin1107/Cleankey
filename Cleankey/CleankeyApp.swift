@@ -345,8 +345,15 @@ final class KeyboardBlocker: ObservableObject {
 
     func startBlocking() {
         guard eventTap == nil else { return }
-        // Ensure we have accessibility trust; the system may disable the tap otherwise.
-        requestPermissionsIfNeeded()
+        // CGEvent.tapCreate can silently remove event types the process may not
+        // monitor while still returning a tap for the remaining mask. Refuse to
+        // report success unless both permissions required for keyboard events exist.
+        let missing = missingPermissions
+        guard missing.isEmpty else {
+            failureMessage = "\(missing.joined(separator: " and ")) not granted. Enable below, then reopen Cleankey."
+            requestPermissionsIfNeeded()
+            return
+        }
 
         // Key down, key up, modifier changes, and the system-defined events that
         // carry media keys (play/pause, brightness, volume).
