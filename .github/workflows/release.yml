@@ -67,9 +67,16 @@ jobs:
       - name: Archive
         run: |
           set -euo pipefail
+          # The project signs with Apple Development so local builds and Xcode's
+          # Run button work. CI only holds the Developer ID certificate, so
+          # override the identity here instead of changing the project.
           xcodebuild -scheme Cleankey -configuration Release \
             -destination 'platform=macOS' \
             -archivePath "$RUNNER_TEMP/Cleankey.xcarchive" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/build.keychain-db" \
             archive
 
       - name: Export with Developer ID
