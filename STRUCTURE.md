@@ -9,7 +9,7 @@ Last updated: 2026-08-18
 - **Platform:** macOS 13.0+ (Ventura and later)
 - **Language:** Swift 5.0
 - **UI Framework:** SwiftUI
-- **Version:** 1.1 (`MARKETING_VERSION`), build 8 (`CURRENT_PROJECT_VERSION`)
+- **Version:** 1.1 (`MARKETING_VERSION`), build 2 (`CURRENT_PROJECT_VERSION`)
 
 ---
 
@@ -352,6 +352,8 @@ com.apple.security.network.client true
 Pushing a `v*` tag runs `.github/workflows/release.yml`, which performs the same
 steps documented below and attaches the zip to the GitHub release. It fails the
 build if `get-task-allow` appears in the exported app.
+If an existing release tag is moved, the workflow replaces the release zip and
+prepends the new commit's subject to the existing release notes.
 
 Running the workflow manually does everything except publish: it builds, signs,
 notarizes, staples and uploads the zip as a workflow artifact, then stops. That
@@ -456,11 +458,10 @@ without it.
 
 The release history was reset on 2026-08-18. Earlier tags (v1.2, v1.2.1, v1.3, and
 a short-lived v1.0/v1.0.1/v1.1 renumbering) were deleted, and v1.0 was republished as
-the initial full release. Build numbers (`CURRENT_PROJECT_VERSION`) kept climbing
-throughout, so they stay monotonic even though the marketing version moved down.
+the initial full release. The refreshed v1.1 release uses build 2.
 
-- **v1.1** (current), build 8: adds live permission status symbols and refreshed
-  menu layout, including full-row settings actions and quieter update status text.
+- **v1.1** (current), build 2: adds localization for English, German, French,
+  Spanish, Simplified Chinese, Italian, Russian and Japanese.
 - **v1.0**, build 6: prevents a partially authorized event tap from
   reporting that keyboard blocking is active. Includes keyboard blocking, Open at
   Login, update checking, and a notarized Developer ID build.

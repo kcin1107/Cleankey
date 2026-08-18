@@ -149,13 +149,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "Cleankey ${GITHUB_REF_NAME#v}" \
-            --generate-notes \
-            --latest \
-          || gh release upload "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" \
-            --repo "$GITHUB_REPOSITORY" --clobber
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null; then
+            gh release upload "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+            EXISTING_NOTES="$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json body --jq .body)"
+            gh release edit "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --notes "$(git log -1 --format='- %s')"$'\n'"$EXISTING_NOTES"
+          else
+            gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Cleankey ${GITHUB_REF_NAME#v}" \
+              --generate-notes \
+              --latest
+          fi
 
       - name: Clean up keychain
         if: always()
