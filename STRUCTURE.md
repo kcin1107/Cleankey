@@ -148,6 +148,27 @@ inherently privileged, so the capability under objection is the app's entire pur
 
 Ship via Developer ID + notarization (see Releasing below).
 
+#### Alternative considered and declined (2026-08-17)
+
+A permission-free design exists: instead of tapping events globally, present a
+full-screen borderless window that takes key status and discards every key event,
+combined with the kiosk `NSApplicationPresentationOptions`
+(`DisableProcessSwitching`, `DisableForceQuit`, `DisableSessionTermination`; each
+requires `HideDock` or `AutoHideDock` alongside it). An app is always allowed to
+receive events routed to itself, so this needs no TCC permission and would make the
+Mac App Store viable again.
+
+It was declined because it is strictly weaker. It covers the screen rather than
+locking invisibly in the background, and system hotkeys dispatched before app
+delivery — Spotlight, screenshot shortcuts, and the media and brightness keys this
+app deliberately catches — are expected to still fire. Blocking the top row is a
+core feature, so the trade was not worth it.
+
+Do not re-investigate the permission split: `CGEventTap` in `.listenOnly` mode needs
+only Input Monitoring, but cannot drop events. Suppression via `.defaultTap` requires
+Accessibility. Verified empirically, and consistent with Apple DTS guidance in
+developer.apple.com/forums/thread/707680.
+
 ---
 
 ## UI Structure
