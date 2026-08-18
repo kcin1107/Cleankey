@@ -17,15 +17,37 @@ private let nxSysDefinedEventType: UInt32 = 14
 private let nxAuxControlButtonsSubtype: Int16 = 8
 
 /// System Settings renamed the Accessibility pane to "Device Control and Data
-/// Access". Confirmed on macOS 27 by reading the pane's own localization table
-/// (`SecurityPrivacyExtension.appex`, key `ACCESSIBILITY`). The exact release that
-/// introduced the rename is unconfirmed, so macOS 26 is a best estimate — adjust if
-/// a 26.x machine shows the old name.
+/// Access" in macOS 27. Both names come from the pane's own localization table
+/// (`SecurityPrivacyExtension.appex`, key `ACCESSIBILITY`).
 private var accessibilityPaneName: String {
-    if #available(macOS 26, *) {
-        return "Device Control and Data Access"
+    if #available(macOS 27, *) {
+        return String(
+            localized: "permissions.accessibility.current",
+            defaultValue: "Device Control and Data Access",
+            comment: "Name of the Accessibility privacy pane in macOS 27 and later."
+        )
     }
-    return "Accessibility"
+    return String(
+        localized: "permissions.accessibility.legacy",
+        defaultValue: "Accessibility",
+        comment: "Name of the Accessibility privacy pane in macOS 26 and earlier."
+    )
+}
+
+/// German and Spanish also received new Input Monitoring labels in macOS 27.
+private var inputMonitoringPaneName: String {
+    if #available(macOS 27, *) {
+        return String(
+            localized: "permissions.inputMonitoring.current",
+            defaultValue: "Input Monitoring",
+            comment: "Name of the Input Monitoring privacy pane in macOS 27 and later."
+        )
+    }
+    return String(
+        localized: "permissions.inputMonitoring.legacy",
+        defaultValue: "Input Monitoring",
+        comment: "Name of the Input Monitoring privacy pane in macOS 26 and earlier."
+    )
 }
 
 private enum PrivacyPane { case inputMonitoring, accessibility }
@@ -52,7 +74,7 @@ private enum SystemSettingsOpener {
 
 /// A titled switch row, matching the panel's layout for both toggles.
 private struct ToggleRow: View {
-    let title: String
+    let title: LocalizedStringKey
     let isOn: Bool
     let set: (Bool) -> Void
 
@@ -63,7 +85,9 @@ private struct ToggleRow: View {
 
             Spacer()
 
-            Toggle("", isOn: Binding(get: { isOn }, set: set))
+            Toggle(isOn: Binding(get: { isOn }, set: set)) {
+                EmptyView()
+            }
                 .labelsHidden()
                 .toggleStyle(.switch)
                 // Matches the switch size System Settings uses; SwiftUI's default
@@ -146,13 +170,16 @@ struct CleankeyApp: App {
                         SystemSettingsOpener.open(.inputMonitoring)
                     } label: {
                         HStack {
-                            Text("Input Monitoring…")
+                            Text(verbatim: "\(inputMonitoringPaneName)…")
+                                .lineLimit(1)
                             Spacer()
                             Image(systemName: blocker.hasInputMonitoringPermission ? "checkmark.circle.fill" : "xmark.circle.fill")
                                 .foregroundStyle(blocker.hasInputMonitoringPermission ? Color.green : Color.red)
                                 .imageScale(.medium)
                                 .fixedSize()
-                                .accessibilityLabel(blocker.hasInputMonitoringPermission ? "Granted" : "Not granted")
+                                .accessibilityLabel(
+                                    blocker.hasInputMonitoringPermission ? Text("Granted") : Text("Not granted")
+                                )
                         }
                     }
                     .settingsRow()
@@ -161,14 +188,16 @@ struct CleankeyApp: App {
                         SystemSettingsOpener.open(.accessibility)
                     } label: {
                         HStack {
-                            Text("\(accessibilityPaneName)…")
+                            Text(verbatim: "\(accessibilityPaneName)…")
                                 .lineLimit(1)
                             Spacer()
                             Image(systemName: blocker.hasAccessibilityPermission ? "checkmark.circle.fill" : "xmark.circle.fill")
                                 .foregroundStyle(blocker.hasAccessibilityPermission ? Color.green : Color.red)
                                 .imageScale(.medium)
                                 .fixedSize()
-                                .accessibilityLabel(blocker.hasAccessibilityPermission ? "Granted" : "Not granted")
+                                .accessibilityLabel(
+                                    blocker.hasAccessibilityPermission ? Text("Granted") : Text("Not granted")
+                                )
                         }
                     }
                     .settingsRow()
@@ -194,7 +223,7 @@ struct CleankeyApp: App {
                 Divider()
 
                 HStack {
-                    Text("v\(appVersion)")
+                    Text(verbatim: "v\(appVersion)")
                         .font(.body)
                         .padding(.horizontal, 6)
 
@@ -256,11 +285,16 @@ final class UpdateChecker: ObservableObject {
 
     var title: String {
         switch state {
-        case .idle: return "Check for Updates…"
-        case .checking: return "Checking…"
-        case .upToDate: return "Cleankey is up to date!"
-        case .available(let version): return "Download \(version)…"
-        case .failed: return "Couldn\u{2019}t check for updates"
+        case .idle: return String(localized: "Check for Updates…")
+        case .checking: return String(localized: "Checking…")
+        case .upToDate: return String(localized: "Cleankey is up to date!")
+        case .available(let version):
+            return String(
+                localized: "updates.download",
+                defaultValue: "Download \(version)…",
+                comment: "Action to download the available version. The argument is a version number."
+            )
+        case .failed: return String(localized: "Couldn\u{2019}t check for updates")
         }
     }
 
@@ -328,7 +362,19 @@ final class LoginItem: ObservableObject {
         let status = SMAppService.mainApp.status
         isEnabled = status == .enabled
         if status == .requiresApproval {
-            message = "Allow Cleankey in System Settings › General › Login Items."
+            if #available(macOS 15, *) {
+                message = String(
+                    localized: "loginItem.approval.current",
+                    defaultValue: "Allow Cleankey in System Settings › General › Login Items & Extensions.",
+                    comment: "Tells the user where to approve Cleankey as a login item in macOS 15 and later."
+                )
+            } else {
+                message = String(
+                    localized: "loginItem.approval.legacy",
+                    defaultValue: "Allow Cleankey in System Settings › General › Login Items.",
+                    comment: "Tells the user where to approve Cleankey as a login item in macOS 13 and 14."
+                )
+            }
         } else if isEnabled || status == .notRegistered {
             message = nil
         }
@@ -343,7 +389,11 @@ final class LoginItem: ObservableObject {
             }
             message = nil
         } catch {
-            message = "Couldn't change Open at Login: \(error.localizedDescription)"
+            message = String(
+                localized: "loginItem.changeError",
+                defaultValue: "Couldn't change Open at Login: \(error.localizedDescription)",
+                comment: "Error shown when changing the login item fails. The argument is the system error."
+            )
         }
         refresh()
     }
@@ -385,7 +435,7 @@ final class KeyboardBlocker: ObservableObject {
         // report success unless both permissions required for keyboard events exist.
         let missing = missingPermissions
         guard missing.isEmpty else {
-            failureMessage = "\(missing.joined(separator: " and ")) not granted. Enable below, then reopen Cleankey."
+            failureMessage = missingPermissionsMessage(missing)
             requestPermissionsIfNeeded()
             return
         }
@@ -415,8 +465,8 @@ final class KeyboardBlocker: ObservableObject {
             // process and needs a relaunch to take effect.
             let missing = missingPermissions
             failureMessage = missing.isEmpty
-                ? "Couldn't lock the keyboard. Quit and reopen Cleankey, then try again."
-                : "\(missing.joined(separator: " and ")) not granted. Enable below, then reopen Cleankey."
+                ? String(localized: "Couldn't lock the keyboard. Quit and reopen Cleankey, then try again.")
+                : missingPermissionsMessage(missing)
             requestPermissionsIfNeeded()
             return
         }
@@ -467,8 +517,23 @@ final class KeyboardBlocker: ObservableObject {
     private var missingPermissions: [String] {
         var missing: [String] = []
         if !AXIsProcessTrusted() { missing.append(accessibilityPaneName) }
-        if !CGPreflightListenEventAccess() { missing.append("Input Monitoring") }
+        if !CGPreflightListenEventAccess() { missing.append(inputMonitoringPaneName) }
         return missing
+    }
+
+    private func missingPermissionsMessage(_ missing: [String]) -> String {
+        if missing.count == 1 {
+            return String(
+                localized: "permissions.missing.one",
+                defaultValue: "\(missing[0]) not granted. Enable below, then reopen Cleankey.",
+                comment: "Shown when one required permission is missing. The argument is its localized name."
+            )
+        }
+        return String(
+            localized: "permissions.missing.multiple",
+            defaultValue: "\(missing[0]) and \(missing[1]) not granted. Enable both below, then reopen Cleankey.",
+            comment: "Shown when both required permissions are missing. The arguments are their localized names."
+        )
     }
 
     /// Prompts for whichever privileges are missing, each via its own system alert.

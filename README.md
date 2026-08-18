@@ -26,15 +26,19 @@ Cleankey installs a system-wide event tap at the HID level and catches key event
 
 Working at the HID level means macOS requires two permissions:
 
-- **Device Control and Data Access** (called **Accessibility** on macOS 15 and earlier) lets Cleankey suppress key events
+- **Device Control and Data Access** (called **Accessibility** on macOS 26 and earlier) lets Cleankey suppress key events
 - **Input Monitoring** lets Cleankey receive them in the first place
 
 Cleankey needs both. With either one missing it cannot block anything. The menu shows a green checkmark or red X beside each permission and provides shortcuts that open the right System Settings pane directly.
 
 ## Requirements
 
-- macOS 14.0 (Sonoma) or later
+- macOS 13.0 (Ventura) or later
 - Works on Apple Silicon and Intel Macs
+
+## Languages
+
+Cleankey automatically follows the language macOS selects for the app, including a per-app language chosen in System Settings. The interface supports English, German, French, Spanish, Simplified Chinese, Italian, Russian and Japanese.
 
 ## Installation
 
@@ -47,7 +51,7 @@ Two options:
 Apple has signed and notarized Cleankey, so it opens normally. macOS asks once to confirm you meant to open something you downloaded.
 
 1. Open Cleankey and click the keyboard icon in the menu bar.
-2. Approve both permission prompts, then switch Cleankey on under Device Control and Data Access and under Input Monitoring.
+2. Approve both permission prompts, then switch Cleankey on under Accessibility (macOS 13–26) or Device Control and Data Access (macOS 27 and later), and under Input Monitoring.
 3. **Quit Cleankey and open it again.** macOS applies new permissions only to a fresh launch, so the toggle keeps failing until you do.
 
 After that the toggle works every time. If it ever refuses to switch on, the menu names the permission that's missing.
