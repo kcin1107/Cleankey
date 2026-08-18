@@ -1,0 +1,115 @@
+name: Release
+
+# Tagging v* builds, signs, notarizes and publishes the app. The same five steps
+# that are documented for local releases in STRUCTURE.md, so the two stay in sync.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import Developer ID certificate
+        env:
+          CERT_P12_BASE64: ${{ secrets.DEVELOPER_ID_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # A throwaway keychain, unlocked only for this job. The password is
+          # generated here, so it never needs to exist as a repository secret.
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          KEYCHAIN=$RUNNER_TEMP/build.keychain-db
+
+          echo "$CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          # Lets codesign use the key without an interactive prompt.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Archive
+        run: |
+          set -euo pipefail
+          xcodebuild -scheme Cleankey -configuration Release \
+            -destination 'platform=macOS' \
+            -archivePath "$RUNNER_TEMP/Cleankey.xcarchive" \
+            archive
+
+      - name: Export with Developer ID
+        run: |
+          set -euo pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Cleankey.xcarchive" \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath "$RUNNER_TEMP/export"
+
+      - name: Verify signature and entitlements
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/export/Cleankey.app"
+          codesign -dv --verbose=4 "$APP" 2>&1 | grep "Authority=Developer ID Application"
+          # A debugger-attachable build must never ship.
+          if codesign -d --entitlements - --xml "$APP" 2>/dev/null | grep -q "get-task-allow"; then
+            echo "::error::get-task-allow present in exported app"
+            exit 1
+          fi
+
+      - name: Notarize and staple
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/export/Cleankey.app"
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/submit.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/submit.zip" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+          spctl -a -vv "$APP"
+
+      - name: Package
+        id: package
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Zip after stapling, so the ticket travels inside the app.
+          ditto -c -k --keepParent "$RUNNER_TEMP/export/Cleankey.app" \
+            "$RUNNER_TEMP/Cleankey-$VERSION.zip"
+          echo "zip=$RUNNER_TEMP/Cleankey-$VERSION.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Cleankey ${GITHUB_REF_NAME#v}" \
+            --generate-notes \
+            --latest \
+          || gh release upload "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
