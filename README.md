@@ -40,6 +40,16 @@ Two options:
 1. Download the .zip archive on the "Releases" section on here and simply drop the `Cleankey.app` file into your `/Applications` (or wherever you want).
 2. Download the whole repository, build the project in Xcode and drop `Cleankey.app` into your `/Applications` folder.
 
+### First run
+
+Cleankey is signed and notarized by Apple, so it opens normally — macOS just asks once to confirm you meant to open something downloaded from the internet.
+
+1. Open Cleankey and click the keyboard icon in the menu bar.
+2. Approve the two permission prompts, and switch Cleankey on in **Accessibility** and in **Input Monitoring**.
+3. **Quit and reopen Cleankey.** macOS only applies new permissions to a fresh launch, so the toggle will still fail until you do.
+
+After that the toggle works immediately, every time. If it ever refuses to switch on, the menu tells you which permission is missing.
+
 Cleankey lives entirely in the menu bar, which means no Dock icon, no app switcher entry. As simple as it gets.
 
 ## FAQ
