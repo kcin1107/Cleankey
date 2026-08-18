@@ -2,6 +2,8 @@ name: Release
 
 # Tagging v* builds, signs, notarizes and publishes the app. The same five steps
 # that are documented for local releases in STRUCTURE.md, so the two stay in sync.
+# A v* tag builds and publishes. A manual run does everything except publish,
+# so the signing and notarization path can be rehearsed without shipping.
 on:
   push:
     tags:
@@ -16,6 +18,13 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select the newest Xcode
+        run: |
+          set -euo pipefail
+          NEWEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -s "$NEWEST"
+          xcodebuild -version
 
       - name: Import Developer ID certificate
         env:
@@ -91,13 +100,31 @@ jobs:
         id: package
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
+          APP="$RUNNER_TEMP/export/Cleankey.app"
+          # On a manual run there is no tag, so take the version from the built
+          # app and mark it, rather than naming the zip after the branch.
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            BUILT=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Contents/Info.plist")
+            VERSION="$BUILT-dev"
+          fi
           # Zip after stapling, so the ticket travels inside the app.
-          ditto -c -k --keepParent "$RUNNER_TEMP/export/Cleankey.app" \
-            "$RUNNER_TEMP/Cleankey-$VERSION.zip"
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/Cleankey-$VERSION.zip"
           echo "zip=$RUNNER_TEMP/Cleankey-$VERSION.zip" >> "$GITHUB_OUTPUT"
+          echo "name=Cleankey-$VERSION.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: ${{ steps.package.outputs.zip }}
+          if-no-files-found: error
 
       - name: Publish release
+        # Tags only. A manual run stops here, having proved the whole signing and
+        # notarization path without creating a release named after the branch.
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
