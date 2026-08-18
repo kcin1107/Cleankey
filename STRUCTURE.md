@@ -9,7 +9,7 @@ Last updated: 2026-08-18
 - **Platform:** macOS 14.0+ (Sonoma and later)
 - **Language:** Swift 5.0
 - **UI Framework:** SwiftUI
-- **Version:** 1.1 (`MARKETING_VERSION`), build 7 (`CURRENT_PROJECT_VERSION`)
+- **Version:** 1.1 (`MARKETING_VERSION`), build 8 (`CURRENT_PROJECT_VERSION`)
 
 ---
 
@@ -225,7 +225,7 @@ MenuBarExtra
     ├── Divider
     └── HStack, Footer
         ├── Text("v\(appVersion)")
-        └── Button("Quit Keyclean") [hover]
+        └── Button("Quit Cleankey") [hover]
 ```
 
 The footer version is read at runtime from the bundle's `CFBundleShortVersionString` via the file-level `appVersion` constant, so it tracks `MARKETING_VERSION` automatically.
@@ -437,7 +437,7 @@ a short-lived v1.0/v1.0.1/v1.1 renumbering) were deleted, and v1.0 was republish
 the initial full release. Build numbers (`CURRENT_PROJECT_VERSION`) kept climbing
 throughout, so they stay monotonic even though the marketing version moved down.
 
-- **v1.1** (current), build 7: adds live permission status symbols and refreshed
+- **v1.1** (current), build 8: adds live permission status symbols and refreshed
   menu layout, including full-row settings actions and quieter update status text.
 - **v1.0**, build 6: prevents a partially authorized event tap from
   reporting that keyboard blocking is active. Includes keyboard blocking, Open at

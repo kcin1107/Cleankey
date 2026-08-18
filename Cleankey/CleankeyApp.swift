@@ -200,7 +200,7 @@ struct CleankeyApp: App {
 
                     Spacer()
 
-                    Button("Quit Keyclean") { NSApp.terminate(nil) }
+                    Button("Quit Cleankey") { NSApp.terminate(nil) }
                         .buttonStyle(.plain)
                         .font(.body)
                         .hoverHighlight()
