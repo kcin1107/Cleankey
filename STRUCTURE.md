@@ -337,6 +337,26 @@ named after it.
 The runner selects the highest-numbered Xcode present and prints its version, so a
 failure caused by a toolchain change is visible in the log.
 
+The CI archive step overrides the signing identity:
+
+```
+CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Developer ID Application"
+```
+
+The project deliberately signs with Apple Development so local builds and Xcode's
+Run button work, but CI imports only the Developer ID certificate. Without the
+override the archive fails with "No signing certificate Mac Development found". Fix
+that in the workflow, never by changing the project, which would force Developer ID
+onto every local build.
+
+Do not add an `openssl pkcs12` check to validate the certificate. Keychain Access
+exports use RC2-40-CBC, which OpenSSL 3 dropped from its default provider, so such a
+check fails on correct certificates. Let `security import` be the judge.
+
+The runner's Xcode can lag the local one (26.3 with the macOS 26.2 SDK at the time
+of writing, against 26.6 locally). That matters only if the code adopts an API newer
+than the runner's SDK.
+
 Four repository secrets are required (Settings > Secrets and variables > Actions):
 
 | Secret | Value |
