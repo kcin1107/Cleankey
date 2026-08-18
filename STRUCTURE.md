@@ -6,7 +6,7 @@ Last updated: 2026-08-18
 
 **Cleankey** is a macOS menu bar utility that temporarily disables all keyboard input system-wide, useful for cleaning a keyboard without triggering unwanted key presses.
 
-- **Platform:** macOS 14.0+ (Sonoma and later)
+- **Platform:** macOS 13.0+ (Ventura and later)
 - **Language:** Swift 5.0
 - **UI Framework:** SwiftUI
 - **Version:** 1.1 (`MARKETING_VERSION`), build 8 (`CURRENT_PROJECT_VERSION`)
@@ -32,7 +32,8 @@ Cleankey/
 ├── Cleankey.xcodeproj/
 └── Cleankey/
     ├── Assets.xcassets/
-    └── CleankeyApp.swift
+    ├── CleankeyApp.swift
+    └── Localizable.xcstrings
 ```
 
 ### Key Files
@@ -45,6 +46,7 @@ Cleankey/
 - `.github/workflows/release.yml`: builds, signs, notarizes and publishes on a `v*` tag. Mirrors the manual steps below, so change both together.
 - `Cleankey.xcodeproj/`: Xcode project bundle.
 - `Cleankey/CleankeyApp.swift`: Main SwiftUI app source (all code lives in this single file).
+- `Cleankey/Localizable.xcstrings`: String Catalog for all eight supported interface languages.
 - `Cleankey/Assets.xcassets/`: App asset catalog (AppIcon, AccentColor).
 
 There is no checked-in `Info.plist`. The target uses `GENERATE_INFOPLIST_FILE = YES`, so the Info.plist is produced at build time from `INFOPLIST_KEY_*` build settings.
@@ -55,14 +57,16 @@ There is no checked-in `Info.plist`. The target uses `GENERATE_INFOPLIST_FILE = 
 
 ## Code Architecture
 
-All code lives in `Cleankey/CleankeyApp.swift` (~520 lines).
+All app logic and UI code lives in `Cleankey/CleankeyApp.swift` (~580 lines).
 
 `accessibilityPaneName` returns the System Settings label for the Accessibility
 pane. macOS renamed it to "Device Control and Data Access"; confirmed on macOS 27
 by reading `SecurityPrivacyExtension.appex`'s own localization table (key
-`ACCESSIBILITY`). The release that introduced the rename is unconfirmed, so the
-`#available(macOS 26, *)` boundary is an estimate. Correct it if a 26.x machine
-still shows "Accessibility".
+`ACCESSIBILITY`). Apple’s macOS 26 user guide still calls the pane "Accessibility",
+so the code switches names at the confirmed `#available(macOS 27, *)` boundary.
+`inputMonitoringPaneName` uses the same boundary because macOS 27 also changed the
+German and Spanish Input Monitoring labels. Both properties return localized names
+that match the corresponding macOS release.
 
 File-level constants: `appVersion` reads `CFBundleShortVersionString` from the bundle for the menu footer; `nxSysDefinedEventType` (14) and `nxAuxControlButtonsSubtype` (8) name the system-defined event magic numbers in one place, since they are needed both when building the event mask and when filtering in the callback.
 
@@ -130,7 +134,7 @@ File-level constants: `appVersion` reads `CFBundleShortVersionString` from the b
 ### 6. `LoginItem` (ObservableObject)
 - **Purpose:** Wraps `SMAppService.mainApp` for the Open at Login switch
 - `refresh()` reads live status on every panel appearance, since the user can change it in System Settings
-- Handles `.requiresApproval`. The user has switched Cleankey off in System Settings › General › Login Items, which the app cannot override, so it says so rather than failing silently
+- Handles `.requiresApproval`. The user has switched Cleankey off in System Settings, which the app cannot override, so it shows the localized path to Login Items on macOS 13–14 or Login Items & Extensions on macOS 15 and later rather than failing silently
 
 ### 7. View components
 - `ToggleRow`: titled switch row used by both toggles. `.controlSize(.small)`; SwiftUI's default `.regular` switch is oversized for a menu bar panel.
@@ -150,6 +154,21 @@ File-level constants: `appVersion` reads `CFBundleShortVersionString` from the b
 - `Combine`: Source of `ObservableObject` and `@Published`. The import is required: `SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES` stops SwiftUI from re-exporting them implicitly, so removing it breaks the build.
 
 No third-party or package dependencies.
+
+### Localization
+
+- English is the development language. The String Catalog also contains German,
+  French, Spanish, Simplified Chinese (`zh-Hans`), Italian, Russian and Japanese.
+- SwiftUI literal labels localize automatically. Runtime status, error and
+  version-dependent permission strings use `String(localized:)`; switch titles use
+  `LocalizedStringKey` at the view boundary.
+- The one-permission and two-permission failures are separate catalog entries so
+  each language can use correct agreement and conjunctions.
+- The permission labels were taken from Apple’s localized System Settings resources
+  and macOS 26 user guide. Do not replace them with literal translations without
+  checking the matching macOS release.
+- macOS chooses the app language from the system or per-app language preference; the
+  app contains no manual language selector.
 
 ### Required Permissions
 
@@ -246,6 +265,8 @@ The footer version is read at runtime from the bundle's `CFBundleShortVersionStr
 - Inline explanation in the menu when the event tap cannot be created (missing permissions)
 - Live granted/not-granted SF Symbol beside each permission shortcut
 - Menu bar-only presence (no Dock icon)
+- Localized interface in English, German, French, Spanish, Simplified Chinese,
+  Italian, Russian and Japanese, selected automatically by macOS
 
 ### Potential Future Enhancements
 - Scheduled/timed blocking
@@ -279,7 +300,8 @@ The footer version is read at runtime from the bundle's `CFBundleShortVersionStr
 
 ## Build Configuration
 
-- **Minimum Deployment Target:** macOS 14.0 (`MACOSX_DEPLOYMENT_TARGET`, mirrored to `LSMinimumSystemVersion`)
+- **Minimum Deployment Target:** macOS 13.0 (`MACOSX_DEPLOYMENT_TARGET`, mirrored to `LSMinimumSystemVersion`)
+- **Localizations:** `en`, `de`, `fr`, `es`, `zh-Hans`, `it`, `ru`, `ja`; compiled from `Localizable.xcstrings`
 - **Supported Platforms:** `macosx` only (`SUPPORTS_MACCATALYST = NO`)
 - **Architecture:** Universal (Apple Silicon + Intel)
 - **Bundle Identifier:** `nick.Cleankey`
