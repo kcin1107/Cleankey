@@ -124,7 +124,7 @@ struct CleankeyApp: App {
             .padding(8)
             .frame(width: 256)
             .onAppear {
-                blocker.requestAccessibilityPermissionIfNeeded()
+                blocker.requestPermissionsIfNeeded()
             }
         }
         .menuBarExtraStyle(.window)
@@ -165,7 +165,7 @@ final class KeyboardBlocker: ObservableObject {
     func startBlocking() {
         guard eventTap == nil else { return }
         // Ensure we have accessibility trust; the system may disable the tap otherwise.
-        requestAccessibilityPermissionIfNeeded()
+        requestPermissionsIfNeeded()
 
         // Key down, key up, modifier changes, and the system-defined events that
         // carry media keys (play/pause, brightness, volume).
@@ -187,9 +187,14 @@ final class KeyboardBlocker: ObservableObject {
             callback: KeyboardBlocker.eventTapCallback,
             userInfo: refcon
         ) else {
-            // The tap almost always fails because Accessibility or Input Monitoring
-            // access hasn't been granted. Stay unblocked and say why.
-            failureMessage = "Couldn't lock the keyboard. Grant Cleankey access below, then try again."
+            // Stay unblocked and name what is actually missing. Both privileges
+            // granted but the tap still failing means the grant predates this
+            // process and needs a relaunch to take effect.
+            let missing = missingPermissions
+            failureMessage = missing.isEmpty
+                ? "Couldn't lock the keyboard. Quit and reopen Cleankey, then try again."
+                : "\(missing.joined(separator: " and ")) not granted. Enable below, then reopen Cleankey."
+            requestPermissionsIfNeeded()
             return
         }
 
@@ -226,12 +231,28 @@ final class KeyboardBlocker: ObservableObject {
         eventTap = nil
     }
 
-    // MARK: - Accessibility Permissions
+    // MARK: - Permissions
 
-    func requestAccessibilityPermissionIfNeeded() {
-        // Ask the system to prompt the user to grant Accessibility permissions if not already granted.
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
+    /// Privileges the tap needs but doesn't have. A suppressing tap requires both:
+    /// Accessibility to drop events, Input Monitoring to receive them at all.
+    private var missingPermissions: [String] {
+        var missing: [String] = []
+        if !AXIsProcessTrusted() { missing.append("Accessibility") }
+        if !CGPreflightListenEventAccess() { missing.append("Input Monitoring") }
+        return missing
+    }
+
+    /// Prompts for whichever privileges are missing, each via its own system alert.
+    /// Granting either one does not affect the running process — macOS applies it
+    /// only after the app is relaunched.
+    func requestPermissionsIfNeeded() {
+        if !AXIsProcessTrusted() {
+            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
+        }
+        if !CGPreflightListenEventAccess() {
+            _ = CGRequestListenEventAccess()
+        }
     }
 
     // MARK: - Tap Callback

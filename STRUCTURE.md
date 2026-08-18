@@ -65,7 +65,7 @@ File-level constants: `appVersion` reads `CFBundleShortVersionString` from the b
   - 256pt fixed width menu
   - Window-style menu bar extra (`.menuBarExtraStyle(.window)`)
   - The switch binds through `blocker.setBlocking(_:)` rather than writing `isBlocking` directly
-  - `.onAppear` requests Accessibility permission
+  - `.onAppear` requests both permissions
 
 ### 2. `KeyboardBlocker` (ObservableObject)
 - **Type:** `final class` conforming to `ObservableObject`
@@ -81,7 +81,8 @@ File-level constants: `appVersion` reads `CFBundleShortVersionString` from the b
 - `startBlocking()` — Creates CGEvent tap at HID level, intercepts all keyboard events. Sets `isBlocking` to `true` only after the tap is installed; on failure (usually missing permissions) leaves it `false` and sets `failureMessage`.
 - `teardownTap()` — Private. Removes the run loop source, disables and invalidates the tap, without touching published state so `deinit` can reuse it.
 - `stopBlocking()` — Calls `teardownTap()` and sets `isBlocking` to `false`, restoring normal input.
-- `requestAccessibilityPermissionIfNeeded()` — Prompts for Accessibility permissions via `AXIsProcessTrustedWithOptions`
+- `requestPermissionsIfNeeded()` — Prompts for both privileges: Accessibility via `AXIsProcessTrustedWithOptions`, Input Monitoring via `CGRequestListenEventAccess()`. Neither takes effect until the app is relaunched.
+- `missingPermissions` — Private. Reports which privileges are absent, via `AXIsProcessTrusted()` and `CGPreflightListenEventAccess()`, so the failure message can name the actual cause rather than guess.
 - `eventTapCallback` — Static callback that filters events (blocks keys when active)
 
 **Event Handling:**
@@ -136,6 +137,12 @@ with either one missing, the tap does not suppress input.
 
 Do not "simplify" the menu by removing either settings shortcut; neither permission
 is optional.
+
+Both are requested explicitly at first menu appearance. Granting either does **not**
+affect the running process — macOS applies the change only on relaunch, so the first
+toggle after granting will still fail. The failure message distinguishes the two
+cases: a named missing privilege versus "Quit and reopen Cleankey", which is what a
+grant-pending-relaunch looks like.
 
 ### Distribution: Developer ID, not the Mac App Store
 
