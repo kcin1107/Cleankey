@@ -9,7 +9,7 @@ Last updated: 2026-08-18
 - **Platform:** macOS 14.0+ (Sonoma and later)
 - **Language:** Swift 5.0
 - **UI Framework:** SwiftUI
-- **Version:** 1.1 (`MARKETING_VERSION`), build 4 (`CURRENT_PROJECT_VERSION`)
+- **Version:** 1.0 (`MARKETING_VERSION`), build 5 (`CURRENT_PROJECT_VERSION`)
 
 ---
 
@@ -398,13 +398,13 @@ without it.
 
 ## Version History
 
-Releases were renumbered on 2026-08-18 to start the public series at 1.0. The old
-tags v1.2, v1.2.1 and v1.3 are gone. Build numbers (`CURRENT_PROJECT_VERSION`) kept
-climbing through the renumbering, so they stay monotonic.
+The release history was reset on 2026-08-18. Earlier tags (v1.2, v1.2.1, v1.3, and
+a short-lived v1.0/v1.0.1/v1.1 renumbering) were deleted, and v1.0 was republished as
+the initial full release. Build numbers (`CURRENT_PROJECT_VERSION`) kept climbing
+throughout, so they stay monotonic even though the marketing version moved down.
 
-- **v1.1** (current): Open at Login, update check, corrected permission naming. Was v1.3.
-- **v1.0.1**: first notarized release. Was v1.2.1.
-- **v1.0**: initial public release. Was v1.2.
+- **v1.0** (current), build 5: initial full release. Keyboard blocking, Open at Login,
+  update check, notarized Developer ID build.
 
 ---
 
