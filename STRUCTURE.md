@@ -1,6 +1,6 @@
 # Cleankey Repository Structure
 
-Last updated: 2026-08-17
+Last updated: 2026-08-18
 
 ## Project Overview
 
@@ -9,7 +9,7 @@ Last updated: 2026-08-17
 - **Platform:** macOS 14.0+ (Sonoma and later)
 - **Language:** Swift 5.0
 - **UI Framework:** SwiftUI
-- **Version:** 1.2.1 (`MARKETING_VERSION`)
+- **Version:** 1.3 (`MARKETING_VERSION`), build 3 (`CURRENT_PROJECT_VERSION`)
 
 ---
 
@@ -51,7 +51,14 @@ There is no checked-in `Info.plist`. The target uses `GENERATE_INFOPLIST_FILE = 
 
 ## Code Architecture
 
-All code lives in `Cleankey/CleankeyApp.swift` (~270 lines).
+All code lives in `Cleankey/CleankeyApp.swift` (~472 lines).
+
+`accessibilityPaneName` returns the System Settings label for the Accessibility
+pane. macOS renamed it to "Device Control and Data Access"; confirmed on macOS 27
+by reading `SecurityPrivacyExtension.appex`'s own localization table (key
+`ACCESSIBILITY`). The release that introduced the rename is unconfirmed, so the
+`#available(macOS 26, *)` boundary is an estimate — correct it if a 26.x machine
+still shows "Accessibility".
 
 File-level constants: `appVersion` reads `CFBundleShortVersionString` from the bundle for the menu footer; `nxSysDefinedEventType` (14) and `nxAuxControlButtonsSubtype` (8) name the system-defined event magic numbers in one place, since they are needed both when building the event mask and when filtering in the callback.
 
@@ -106,11 +113,24 @@ File-level constants: `appVersion` reads `CFBundleShortVersionString` from the b
 - **Implementation:** Opens `x-apple.systempreferences:com.apple.preference.security?<anchor>`, where the anchor is `Privacy_ListenEvent` for Input Monitoring and `Privacy_Accessibility` for Accessibility.
 - **Anchor names matter:** there is no `Privacy_InputMonitoring` anchor — Input Monitoring is `Privacy_ListenEvent`. An unknown anchor does not fail; it silently opens the generic Privacy & Security page. `NSWorkspace.open()` returns `true` either way, so a bad anchor cannot be detected and no fallback chain is possible. Verify anchor names against `/System/Library/ExtensionKit/Extensions/SecurityPrivacyIntentsExtension.appex` before changing them.
 
-### 5. `SettingsRow` (ViewModifier)
-- **Type:** `private struct` conforming to `ViewModifier`
-- **Purpose:** Shared look for the two settings rows — plain button style, full width, padding, and a hover highlight — so the modifier chain is not repeated per row
-- **Style:** Rounded rectangle with 15% opacity secondary color on hover
-- Applied via the `settingsRow()` helper in a `private extension View`
+### 5. `UpdateChecker` (ObservableObject)
+- **Purpose:** Compares the running version against the latest GitHub release
+- **Endpoint:** `https://api.github.com/repos/seafyre/Cleankey/releases/latest`, reading `tag_name` and stripping a leading `v` (release tags are `v1.2.1` style)
+- **Comparison:** `compare(_:options: .numeric)` so 1.10 sorts above 1.9
+- **State machine:** `.idle` / `.checking` / `.upToDate` / `.available(String)` / `.failed`. The row's label *is* the state, so there is no separate status line, and `act()` downloads when an update is waiting and re-checks otherwise — the up-to-date and failed states double as retry.
+- `reset()` runs on panel appearance so a stale result doesn't linger as the label.
+- **Installs nothing by design.** The user downloads and replaces the app. Adopting Sparkle would require bundling XPC services, `SUEnableInstallerLauncherService`, re-signing every nested binary with Developer ID, and publishing a signed appcast per release — disproportionate for an app that ships a few times a year.
+
+### 6. `LoginItem` (ObservableObject)
+- **Purpose:** Wraps `SMAppService.mainApp` for the Open at Login switch
+- `refresh()` reads live status on every panel appearance, since the user can change it in System Settings
+- Handles `.requiresApproval` — the user has switched Cleankey off in System Settings › General › Login Items, which the app cannot override, so it says so rather than failing silently
+
+### 7. View components
+- `ToggleRow` — titled switch row used by both toggles. `.controlSize(.small)`; SwiftUI's default `.regular` switch is oversized for a menu bar panel.
+- `HintText` — secondary explanatory line under a row
+- `HoverHighlight` — rounded hover highlight, shared by the settings rows **and** Quit
+- `SettingsRow` — `HoverHighlight` plus plain button style and full-width leading alignment. Quit uses `hoverHighlight()` directly, since it sits right-aligned in the footer; that split is why the two are separate modifiers.
 
 ---
 
@@ -120,6 +140,7 @@ File-level constants: `appVersion` reads `CFBundleShortVersionString` from the b
 - `SwiftUI` — UI framework
 - `Cocoa` — macOS AppKit integration
 - `ApplicationServices` — CGEvent and accessibility APIs
+- `ServiceManagement` — `SMAppService` for the login item
 - `Combine` — Source of `ObservableObject` and `@Published`. The import is required: `SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES` stops SwiftUI from re-exporting them implicitly, so removing it breaks the build.
 
 No third-party or package dependencies.
@@ -183,18 +204,21 @@ developer.apple.com/forums/thread/707680.
 ```text
 MenuBarExtra
 └── VStack (8pt spacing, 8pt padding, 256pt width)
-    ├── HStack — Title & Toggle
-    │   ├── Text("Keyboard Cleaning")
-    │   └── Toggle (switch style)
-    ├── Text(failureMessage) — only when the tap failed to start
+    ├── ToggleRow("Keyboard Cleaning")
+    ├── HintText(failureMessage) — only when the tap failed to start
+    ├── Divider
+    ├── ToggleRow("Open at Login")
+    ├── HintText(loginItem.message) — only when approval is required
     ├── Divider
     ├── VStack — Settings Buttons (4pt spacing)
-    │   ├── Button("Input Monitoring Settings…") [with hover effect]
-    │   └── Button("Accessibility Settings…") [with hover effect]
+    │   ├── Button("Input Monitoring…") [hover]
+    │   └── Button("<accessibilityPaneName>…") [hover]
+    ├── Divider
+    ├── Button(updates.title) [hover] — label reflects update state
     ├── Divider
     └── HStack — Footer
         ├── Text("v\(appVersion)")
-        └── Button("Quit")
+        └── Button("Quit") [hover]
 ```
 
 The footer version is read at runtime from the bundle's `CFBundleShortVersionString` via the file-level `appVersion` constant, so it tracks `MARKETING_VERSION` automatically.
@@ -209,6 +233,8 @@ The footer version is read at runtime from the bundle's `CFBundleShortVersionStr
 - Automatic permission requests
 - Direct links to System Settings privacy panes
 - Hover effects on menu items
+- Open at Login, via `SMAppService`
+- Check for Updates against GitHub Releases (notifies only; does not install)
 - Auto-recovery from event tap timeouts
 - Inline explanation in the menu when the event tap cannot be created (missing permissions)
 - Menu bar-only presence (no Dock icon)
@@ -218,8 +244,8 @@ The footer version is read at runtime from the bundle's `CFBundleShortVersionStr
 - Keyboard shortcuts to toggle
 - Block specific keys only
 - Visual/audio feedback when blocking
-- Launch at login option
 - Persistent state (remember blocking state across launches)
+- Automatic update check at launch (currently on demand only)
 
 ---
 
@@ -252,7 +278,7 @@ The footer version is read at runtime from the bundle's `CFBundleShortVersionStr
 - **App Category:** Utilities
 - **Activation Policy:** Accessory (menu bar only) — `INFOPLIST_KEY_LSUIElement = YES` plus the runtime `setActivationPolicy(.accessory)` call
 - **Info.plist:** Generated (`GENERATE_INFOPLIST_FILE = YES`); configure via `INFOPLIST_KEY_*` settings, not a checked-in file
-- **App Sandbox:** Enabled (`ENABLE_APP_SANDBOX = YES`), with `ENABLE_USER_SELECTED_FILES = NO`. The app opens no file pickers, so `com.apple.security.app-sandbox` is the only entitlement it needs.
+- **App Sandbox:** Enabled (`ENABLE_APP_SANDBOX = YES`), with `ENABLE_USER_SELECTED_FILES = NO` — the app opens no file pickers. Entitlements are `com.apple.security.app-sandbox` and `com.apple.security.network.client`, the latter from `ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES` for the update check. Keep the set this small; add an entitlement only when a feature genuinely needs it.
 - **Build number:** `CURRENT_PROJECT_VERSION` must be incremented on every release; it is the `CFBundleVersion` and does not track `MARKETING_VERSION`.
 - **Platform settings:** the target is macOS-only. Do not reintroduce `INFOPLIST_KEY_UI*`, `IPHONEOS_DEPLOYMENT_TARGET`, `XROS_DEPLOYMENT_TARGET`, or `SUPPORTS_MACCATALYST` — Xcode adds them to multiplatform templates, but they are inert here.
 - **Hardened Runtime:** Enabled
@@ -287,7 +313,8 @@ codesign -d --entitlements - --xml Cleankey.xcarchive/Products/Applications/Clea
 Expected — sandbox present, no `get-task-allow`:
 
 ```text
-com.apple.security.app-sandbox  true
+com.apple.security.app-sandbox   true
+com.apple.security.network.client true
 ```
 
 The `1.2` build currently in `/Applications` was shipped with `get-task-allow` present and should be replaced.

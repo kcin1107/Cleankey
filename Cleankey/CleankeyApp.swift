@@ -1,6 +1,7 @@
 import SwiftUI
 import Cocoa
 import ApplicationServices
+import ServiceManagement
 // Combine provides ObservableObject and @Published; member import visibility is
 // enabled, so SwiftUI does not re-export them implicitly.
 import Combine
@@ -14,6 +15,18 @@ private let nxSysDefinedEventType: UInt32 = 14
 
 /// NX_SUBTYPE_AUX_CONTROL_BUTTONS — marks a system-defined event as a media key.
 private let nxAuxControlButtonsSubtype: Int16 = 8
+
+/// System Settings renamed the Accessibility pane to "Device Control and Data
+/// Access". Confirmed on macOS 27 by reading the pane's own localization table
+/// (`SecurityPrivacyExtension.appex`, key `ACCESSIBILITY`). The exact release that
+/// introduced the rename is unconfirmed, so macOS 26 is a best estimate — adjust if
+/// a 26.x machine shows the old name.
+private var accessibilityPaneName: String {
+    if #available(macOS 26, *) {
+        return "Device Control and Data Access"
+    }
+    return "Accessibility"
+}
 
 private enum PrivacyPane { case inputMonitoring, accessibility }
 
@@ -37,14 +50,51 @@ private enum SystemSettingsOpener {
     }
 }
 
-/// Shared look for the settings rows: full width, padded, highlighted on hover.
-private struct SettingsRow: ViewModifier {
+/// A titled switch row, matching the panel's layout for both toggles.
+private struct ToggleRow: View {
+    let title: String
+    let isOn: Bool
+    let set: (Bool) -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.body)
+
+            Spacer()
+
+            Toggle("", isOn: Binding(get: { isOn }, set: set))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                // Matches the switch size System Settings uses; SwiftUI's default
+                // .regular switch is oversized for a menu bar panel.
+                .controlSize(.small)
+                .fixedSize()
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 6)
+    }
+}
+
+/// Secondary explanatory line shown under a row when something needs attention.
+private struct HintText: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 6)
+    }
+}
+
+/// Rounded highlight on hover, shared by every clickable row in the panel.
+private struct HoverHighlight: ViewModifier {
     @State private var isHover = false
 
     func body(content: Content) -> some View {
         content
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 6)
             .padding(.horizontal, 6)
             .onHover { isHover = $0 }
@@ -55,52 +105,59 @@ private struct SettingsRow: ViewModifier {
     }
 }
 
+/// A settings row: plain, full width and leading aligned, with the hover highlight.
+/// Quit uses `hoverHighlight()` directly, since it sits right aligned in the footer.
+private struct SettingsRow: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(HoverHighlight())
+    }
+}
+
 private extension View {
     func settingsRow() -> some View { modifier(SettingsRow()) }
+    func hoverHighlight() -> some View { modifier(HoverHighlight()) }
 }
 
 @main
 struct CleankeyApp: App {
     @StateObject private var blocker = KeyboardBlocker()
+    @StateObject private var loginItem = LoginItem()
+    @StateObject private var updates = UpdateChecker()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
         MenuBarExtra("Cleankey", systemImage: blocker.isBlocking ? "keyboard.fill" : "keyboard") {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 12) {
-                    Text("Keyboard Cleaning")
-                        .font(.body)
-
-                    Spacer()
-
-                    Toggle("", isOn: Binding(
-                        get: { blocker.isBlocking },
-                        set: { blocker.setBlocking($0) }
-                    ))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .fixedSize()
+                ToggleRow(title: "Keyboard Cleaning", isOn: blocker.isBlocking) {
+                    blocker.setBlocking($0)
                 }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 6)
 
                 if let failureMessage = blocker.failureMessage {
-                    Text(failureMessage)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 6)
+                    HintText(text: failureMessage)
+                }
+
+                Divider()
+
+                ToggleRow(title: "Open at Login", isOn: loginItem.isEnabled) {
+                    loginItem.setEnabled($0)
+                }
+
+                if let message = loginItem.message {
+                    HintText(text: message)
                 }
 
                 Divider()
 
                 VStack(spacing: 4) {
-                    Button("Input Monitoring Settings…") {
+                    Button("Input Monitoring…") {
                         SystemSettingsOpener.open(.inputMonitoring)
                     }
                     .settingsRow()
 
-                    Button("Accessibility Settings…") {
+                    Button("\(accessibilityPaneName)…") {
                         SystemSettingsOpener.open(.accessibility)
                     }
                     .settingsRow()
@@ -108,23 +165,33 @@ struct CleankeyApp: App {
 
                 Divider()
 
+                Button(updates.title) { updates.act() }
+                    .settingsRow()
+                    .disabled(updates.isChecking)
+
+                Divider()
+
                 HStack {
                     Text("v\(appVersion)")
                         .font(.body)
+                        .padding(.horizontal, 6)
 
                     Spacer()
 
                     Button("Quit") { NSApp.terminate(nil) }
                         .buttonStyle(.plain)
                         .font(.body)
+                        .hoverHighlight()
                 }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 6)
             }
             .padding(8)
             .frame(width: 256)
             .onAppear {
                 blocker.requestPermissionsIfNeeded()
+                // The user can change this in System Settings, so re-read it
+                // every time the panel opens rather than trusting cached state.
+                loginItem.refresh()
+                updates.reset()
             }
         }
         .menuBarExtraStyle(.window)
@@ -135,6 +202,120 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Ensure we live only in the menu bar (no Dock icon/app switcher)
         NSApp.setActivationPolicy(.accessory)
+    }
+}
+
+private struct GitHubRelease: Decodable {
+    let tagName: String
+
+    enum CodingKeys: String, CodingKey { case tagName = "tag_name" }
+}
+
+/// Compares the running version against the latest GitHub release. Deliberately
+/// installs nothing: the user downloads and replaces the app. That keeps Cleankey
+/// free of an update framework, its XPC services, and their signing requirements.
+///
+/// The row's label *is* the state, so there is no separate status line, and the
+/// button always performs the sensible next action for that state.
+final class UpdateChecker: ObservableObject {
+    enum State {
+        case idle
+        case checking
+        case upToDate
+        case available(String)
+        case failed
+    }
+
+    @Published private(set) var state: State = .idle
+
+    private let apiURL = URL(string: "https://api.github.com/repos/seafyre/Cleankey/releases/latest")!
+    private static let releasesURL = URL(string: "https://github.com/seafyre/Cleankey/releases/latest")!
+
+    var title: String {
+        switch state {
+        case .idle: return "Check for Updates…"
+        case .checking: return "Checking…"
+        case .upToDate: return "Cleankey is up to date!"
+        case .available(let version): return "Download \(version)…"
+        case .failed: return "Couldn\u{2019}t check for updates"
+        }
+    }
+
+    var isChecking: Bool {
+        if case .checking = state { return true }
+        return false
+    }
+
+    /// Download when one is waiting, otherwise check — or check again, so the
+    /// up-to-date and failed states double as a retry.
+    func act() {
+        if case .available = state {
+            NSWorkspace.shared.open(Self.releasesURL)
+        } else {
+            check()
+        }
+    }
+
+    /// Called when the panel opens so a stale result doesn't linger as the label.
+    func reset() {
+        if !isChecking { state = .idle }
+    }
+
+    private func check() {
+        guard !isChecking else { return }
+        state = .checking
+
+        Task {
+            do {
+                var request = URLRequest(url: apiURL)
+                request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+                let (data, _) = try await URLSession.shared.data(for: request)
+                let tag = try JSONDecoder().decode(GitHubRelease.self, from: data).tagName
+                let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+
+                // Numeric compare so 1.10 sorts above 1.9.
+                state = latest.compare(appVersion, options: .numeric) == .orderedDescending
+                    ? .available(latest)
+                    : .upToDate
+            } catch {
+                state = .failed
+            }
+        }
+    }
+}
+
+/// Wraps `SMAppService.mainApp` so the menu can show and change whether Cleankey
+/// launches at login.
+final class LoginItem: ObservableObject {
+    @Published private(set) var isEnabled = false
+    @Published private(set) var message: String?
+
+    init() { refresh() }
+
+    /// Reads the live status. `.requiresApproval` means the user has switched
+    /// Cleankey off in System Settings, which the app cannot override.
+    func refresh() {
+        let status = SMAppService.mainApp.status
+        isEnabled = status == .enabled
+        if status == .requiresApproval {
+            message = "Allow Cleankey in System Settings › General › Login Items."
+        } else if isEnabled || status == .notRegistered {
+            message = nil
+        }
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            message = nil
+        } catch {
+            message = "Couldn't change Open at Login: \(error.localizedDescription)"
+        }
+        refresh()
     }
 }
 
@@ -237,7 +418,7 @@ final class KeyboardBlocker: ObservableObject {
     /// Accessibility to drop events, Input Monitoring to receive them at all.
     private var missingPermissions: [String] {
         var missing: [String] = []
-        if !AXIsProcessTrusted() { missing.append("Accessibility") }
+        if !AXIsProcessTrusted() { missing.append(accessibilityPaneName) }
         if !CGPreflightListenEventAccess() { missing.append("Input Monitoring") }
         return missing
     }
