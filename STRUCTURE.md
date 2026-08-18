@@ -9,7 +9,7 @@ Last updated: 2026-08-18
 - **Platform:** macOS 14.0+ (Sonoma and later)
 - **Language:** Swift 5.0
 - **UI Framework:** SwiftUI
-- **Version:** 1.0 (`MARKETING_VERSION`), build 5 (`CURRENT_PROJECT_VERSION`)
+- **Version:** 1.0 (`MARKETING_VERSION`), build 6 (`CURRENT_PROJECT_VERSION`)
 
 ---
 
@@ -89,7 +89,7 @@ File-level constants: `appVersion` reads `CFBundleShortVersionString` from the b
 
 **Key Methods:**
 - `setBlocking(_:)`: Single entry point for the switch; routes to `startBlocking()` / `stopBlocking()`.
-- `startBlocking()`: Creates CGEvent tap at HID level, intercepts all keyboard events. Sets `isBlocking` to `true` only after the tap is installed; on failure (usually missing permissions) leaves it `false` and sets `failureMessage`.
+- `startBlocking()`: Refuses activation unless both required permissions pass their preflight checks, then creates a CGEvent tap at HID level and intercepts all keyboard events. The explicit permission gate prevents a partially authorized tap from making the switch appear on while ordinary key events still pass through. Sets `isBlocking` to `true` only after the tap is installed; on failure leaves it `false` and sets `failureMessage`.
 - `teardownTap()`: Private. Removes the run loop source, disables and invalidates the tap, without touching published state so `deinit` can reuse it.
 - `stopBlocking()`: Calls `teardownTap()` and sets `isBlocking` to `false`, restoring normal input.
 - `requestPermissionsIfNeeded()`: Prompts for both privileges: Accessibility via `AXIsProcessTrustedWithOptions`, Input Monitoring via `CGRequestListenEventAccess()`. Neither takes effect until the app is relaunched.
@@ -433,8 +433,9 @@ a short-lived v1.0/v1.0.1/v1.1 renumbering) were deleted, and v1.0 was republish
 the initial full release. Build numbers (`CURRENT_PROJECT_VERSION`) kept climbing
 throughout, so they stay monotonic even though the marketing version moved down.
 
-- **v1.0** (current), build 5: initial full release. Keyboard blocking, Open at Login,
-  update check, notarized Developer ID build.
+- **v1.0** (current), build 6: prevents a partially authorized event tap from
+  reporting that keyboard blocking is active. Includes keyboard blocking, Open at
+  Login, update checking, and a notarized Developer ID build.
 
 ---
 
