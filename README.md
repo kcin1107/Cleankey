@@ -27,7 +27,7 @@ Because it operates at the HID level, Cleankey needs two permissions:
 - **Accessibility** — to create the event tap
 - **Input Monitoring** — to intercept keyboard events system-wide
 
-Both can be granted in System Settings. Cleankey includes shortcuts to jump straight there.
+Both are required — with either one missing, Cleankey cannot block input. Both can be granted in System Settings, and Cleankey includes shortcuts to jump straight there.
 
 ## Requirements
 

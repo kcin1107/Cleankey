@@ -25,6 +25,7 @@ Cleankey/
 ├── README.md
 ├── STRUCTURE.md
 ├── CleankeyDemo.gif
+├── ExportOptions.plist
 ├── Cleankey.xcodeproj/
 └── Cleankey/
     ├── Assets.xcassets/
@@ -37,6 +38,7 @@ Cleankey/
 - `README.md` — Project overview and user-facing documentation.
 - `STRUCTURE.md` — This file: repository structure and app architecture reference.
 - `CleankeyDemo.gif` — Demo animation embedded in the README.
+- `ExportOptions.plist` — Developer ID export settings used by `xcodebuild -exportArchive`. Contains no secrets.
 - `Cleankey.xcodeproj/` — Xcode project bundle.
 - `Cleankey/CleankeyApp.swift` — Main SwiftUI app source (all code lives in this single file).
 - `Cleankey/Assets.xcassets/` — App asset catalog (AppIcon, AccentColor).
@@ -122,8 +124,29 @@ File-level constants: `appVersion` reads `CFBundleShortVersionString` from the b
 No third-party or package dependencies.
 
 ### Required Permissions
-1. **Accessibility** — Required for CGEvent tap to function
-2. **Input Monitoring** — Recommended for full keyboard interception
+
+Both are **required**. Verified empirically on 2026-08-17 by revoking each in turn:
+with either one missing, the tap does not suppress input.
+
+1. **Accessibility** (`kTCCServiceAccessibility`) — Required to create a suppressing
+   event tap. A `listenOnly` tap needs only Input Monitoring, but cannot drop events,
+   so it is useless here.
+2. **Input Monitoring** (`kTCCServiceListenEvent`) — Required for `CGEventTap` to
+   receive keyboard events at all.
+
+Do not "simplify" the menu by removing either settings shortcut; neither permission
+is optional.
+
+### Distribution: Developer ID, not the Mac App Store
+
+Mac App Store submission is not a realistic path. App Review rejects apps under
+Guideline 2.4.5 for using Accessibility features for non-accessibility purposes, and
+suppressing keyboard input requires exactly that privilege. There is no engineering
+workaround: `listenOnly` taps cannot drop events, and the IOKit HID routes that could
+seize the keyboard are unavailable to a sandboxed app. Blocking all keyboard input is
+inherently privileged, so the capability under objection is the app's entire purpose.
+
+Ship via Developer ID + notarization (see Releasing below).
 
 ---
 
@@ -240,6 +263,54 @@ com.apple.security.app-sandbox  true
 ```
 
 The `1.2` build currently in `/Applications` was shipped with `get-task-allow` present and should be replaced.
+
+#### Signing and notarization
+
+An archive signed with **Apple Development** runs locally but is rejected by
+Gatekeeper on any machine that downloads it, because downloaded files carry a
+quarantine flag. Distributable builds must be signed with a **Developer ID
+Application** certificate and notarized by Apple.
+
+The target deliberately keeps `CODE_SIGN_IDENTITY[sdk=macosx*] = "Apple Development"`.
+Developer ID is applied at export time via `ExportOptions.plist`, so local builds
+and Xcode's Run button are unaffected. Do not switch the Signing Certificate in
+Xcode's Signing & Capabilities pane — with automatic signing that applies to every
+configuration, including Debug.
+
+One-time setup:
+
+1. Xcode → Settings → Accounts → Apple ID → Manage Certificates… → + → **Developer ID Application**.
+2. Store notary credentials in the keychain. Never put them in the repo or in a
+   command that ends up in shell history:
+
+```bash
+xcrun notarytool store-credentials "Cleankey" --apple-id YOUR_APPLE_ID --team-id 56JJ9GRL32
+```
+
+   It prompts for an app-specific password, generated at appleid.apple.com under
+   Sign-In and Security. Everything afterwards refers to the profile by name only.
+
+Per release:
+
+```bash
+xcodebuild -exportArchive -archivePath ./Cleankey.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath ./export
+ditto -c -k --keepParent ./export/Cleankey.app ./Cleankey.zip
+xcrun notarytool submit ./Cleankey.zip --keychain-profile "Cleankey" --wait
+xcrun stapler staple ./export/Cleankey.app
+```
+
+Re-zip **after** stapling — the ticket has to be inside the app that is actually
+distributed, and the zip submitted for notarization does not contain it.
+
+Verify the result:
+
+```bash
+spctl -a -vv ./export/Cleankey.app     # expect: accepted, source=Notarized Developer ID
+codesign -dv --verbose=4 ./export/Cleankey.app 2>&1 | grep Authority
+```
+
+`ENABLE_HARDENED_RUNTIME = YES` is already set; notarization rejects anything
+without it.
 
 ---
 
