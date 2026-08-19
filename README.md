@@ -1,6 +1,4 @@
-<img src="Cleankey/Assets.xcassets/AppIcon.appiconset/iconMacOS (128px 1x) 1.png" width="96" alt="Cleankey app icon, a macOS menu bar keyboard lock utility">
-
-## Cleankey: Keyboard Cleaning Made Easy
+### Cleankey: Keyboard Cleaning Made Easy
 Cleankey is a tiny, free macOS menu bar app that temporarily locks your keyboard so you can wipe down the keys without triggering accidental keystrokes. Flip the toggle to clean off your greasy fingers from your keyboard and be happy.
 
 ![Cleankey demo, toggling keyboard lock on and off from the macOS menu bar to clean a keyboard safely](CleankeyDemo.gif)
@@ -12,8 +10,8 @@ Wiping down a Mac keyboard normally fires off a storm of keystrokes. Apps open, 
 Cleankey installs a system-wide event tap at the HID level and catches key events before they reach any app. While blocking is active, Cleankey drops every keystroke, including modifier keys and media keys like play/pause and volume. Toggle it off and everything returns to normal. Your trackpad keeps working all the time, so you can easily enable your keyboard again.
 
 ### Two permissions on system-level are required for the application to work:
-- _Device Control and Data Access_ (called _Accessibility_ on macOS 26 and earlier) lets Cleankey suppress all key events
-- _Input Monitoring_ lets Cleankey receive the key events
+- **Device Control and Data Acces** (called **Accessibility** on macOS 26 and earlier) lets Cleankey suppress all key events
+- **Input Monitoring** lets Cleankey receive the key events
 
 ### Requirements
 - macOS 13.0 (Ventura) or later
