@@ -1,10 +1,9 @@
 import SwiftUI
-import Cocoa
+import AppKit
 import ApplicationServices
+import Foundation
+import Observation
 import ServiceManagement
-// Combine provides ObservableObject and @Published; member import visibility is
-// enabled, so SwiftUI does not re-export them implicitly.
-import Combine
 
 /// Marketing version from the generated Info.plist, so the menu never drifts from the build.
 private let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
@@ -113,6 +112,28 @@ private struct HintText: View {
     }
 }
 
+private struct PermissionRow: View {
+    let title: String
+    let isGranted: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(verbatim: "\(title)…")
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: isGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .foregroundStyle(isGranted ? Color.green : Color.red)
+                    .imageScale(.medium)
+                    .fixedSize()
+                    .accessibilityLabel(isGranted ? Text("Granted") : Text("Not granted"))
+            }
+        }
+        .settingsRow()
+    }
+}
+
 /// Rounded highlight on hover, shared by every clickable row in the panel.
 private struct HoverHighlight: ViewModifier {
     @State private var isHover = false
@@ -147,113 +168,93 @@ private extension View {
 
 @main
 struct CleankeyApp: App {
-    @StateObject private var blocker = KeyboardBlocker()
-    @StateObject private var loginItem = LoginItem()
-    @StateObject private var updates = UpdateChecker()
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var blocker = KeyboardBlocker()
+    @State private var loginItem = LoginItem()
+    @State private var updates = UpdateChecker()
 
     var body: some Scene {
         MenuBarExtra("Cleankey", systemImage: blocker.isBlocking ? "keyboard.fill" : "keyboard") {
-            VStack(alignment: .leading, spacing: 8) {
-                ToggleRow(title: "Keyboard Cleaning", isOn: blocker.isBlocking) {
-                    blocker.setBlocking($0)
-                }
-
-                if let failureMessage = blocker.failureMessage {
-                    HintText(text: failureMessage)
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Button {
-                        SystemSettingsOpener.open(.inputMonitoring)
-                    } label: {
-                        HStack {
-                            Text(verbatim: "\(inputMonitoringPaneName)…")
-                                .lineLimit(1)
-                            Spacer()
-                            Image(systemName: blocker.hasInputMonitoringPermission ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundStyle(blocker.hasInputMonitoringPermission ? Color.green : Color.red)
-                                .imageScale(.medium)
-                                .fixedSize()
-                                .accessibilityLabel(
-                                    blocker.hasInputMonitoringPermission ? Text("Granted") : Text("Not granted")
-                                )
-                        }
-                    }
-                    .settingsRow()
-
-                    Button {
-                        SystemSettingsOpener.open(.accessibility)
-                    } label: {
-                        HStack {
-                            Text(verbatim: "\(accessibilityPaneName)…")
-                                .lineLimit(1)
-                            Spacer()
-                            Image(systemName: blocker.hasAccessibilityPermission ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundStyle(blocker.hasAccessibilityPermission ? Color.green : Color.red)
-                                .imageScale(.medium)
-                                .fixedSize()
-                                .accessibilityLabel(
-                                    blocker.hasAccessibilityPermission ? Text("Granted") : Text("Not granted")
-                                )
-                        }
-                    }
-                    .settingsRow()
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 4) {
-                    ToggleRow(title: "Open at Login", isOn: loginItem.isEnabled) {
-                        loginItem.setEnabled($0)
-                    }
-
-                    if let message = loginItem.message {
-                        HintText(text: message)
-                    }
-
-                    Button(updates.title) { updates.act() }
-                        .foregroundStyle(updates.isInformational ? Color.secondary : Color.primary)
-                        .settingsRow()
-                        .disabled(updates.isChecking)
-                }
-
-                Divider()
-
-                HStack {
-                    Text(verbatim: "v\(appVersion)")
-                        .font(.body)
-                        .padding(.horizontal, 6)
-
-                    Spacer()
-
-                    Button("Quit Cleankey") { NSApp.terminate(nil) }
-                        .buttonStyle(.plain)
-                        .font(.body)
-                        .hoverHighlight()
-                }
-            }
-            .padding(8)
-            .frame(width: 256)
-            .onAppear {
-                blocker.refreshPermissionStatus()
-                blocker.requestPermissionsIfNeeded()
-                // The user can change this in System Settings, so re-read it
-                // every time the panel opens rather than trusting cached state.
-                loginItem.refresh()
-                updates.reset()
-            }
+            CleankeyMenuContent(blocker: blocker, loginItem: loginItem, updates: updates)
         }
         .menuBarExtraStyle(.window)
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        // Ensure we live only in the menu bar (no Dock icon/app switcher)
-        NSApp.setActivationPolicy(.accessory)
+private struct CleankeyMenuContent: View {
+    let blocker: KeyboardBlocker
+    let loginItem: LoginItem
+    let updates: UpdateChecker
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ToggleRow(title: "Keyboard Cleaning", isOn: blocker.isBlocking) {
+                blocker.setBlocking($0)
+            }
+
+            if let failureMessage = blocker.failureMessage {
+                HintText(text: failureMessage)
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 4) {
+                PermissionRow(
+                    title: inputMonitoringPaneName,
+                    isGranted: blocker.hasInputMonitoringPermission
+                ) {
+                    SystemSettingsOpener.open(.inputMonitoring)
+                }
+
+                PermissionRow(
+                    title: accessibilityPaneName,
+                    isGranted: blocker.hasAccessibilityPermission
+                ) {
+                    SystemSettingsOpener.open(.accessibility)
+                }
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 4) {
+                ToggleRow(title: "Open at Login", isOn: loginItem.isEnabled) {
+                    loginItem.setEnabled($0)
+                }
+
+                if let message = loginItem.message {
+                    HintText(text: message)
+                }
+
+                Button(updates.title) { updates.act() }
+                    .foregroundStyle(updates.isInformational ? Color.secondary : Color.primary)
+                    .settingsRow()
+                    .disabled(updates.isChecking)
+            }
+
+            Divider()
+
+            HStack {
+                Text(verbatim: "v\(appVersion)")
+                    .font(.body)
+                    .padding(.horizontal, 6)
+
+                Spacer()
+
+                Button("Quit Cleankey") { NSApp.terminate(nil) }
+                    .buttonStyle(.plain)
+                    .font(.body)
+                    .hoverHighlight()
+            }
+        }
+        .padding(8)
+        .frame(width: 256)
+        .onAppear {
+            blocker.refreshPermissionStatus()
+            blocker.requestPermissionsIfNeeded()
+            // The user can change this in System Settings, so re-read it
+            // every time the panel opens rather than trusting cached state.
+            loginItem.refresh()
+            updates.reset()
+        }
     }
 }
 
@@ -263,14 +264,46 @@ private struct GitHubRelease: Decodable {
     enum CodingKeys: String, CodingKey { case tagName = "tag_name" }
 }
 
+struct UpdateCheckerDependencies {
+    let currentVersion: String
+    let fetchLatestVersion: () async throws -> String
+    let openReleasesPage: () -> Void
+
+    static let live = UpdateCheckerDependencies(
+        currentVersion: appVersion,
+        fetchLatestVersion: {
+            let apiURL = URL(string: "https://api.github.com/repos/kcin1107/Cleankey/releases/latest")!
+            var request = URLRequest(url: apiURL)
+            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            return try UpdateCheckerDependencies.version(from: data, response: response)
+        },
+        openReleasesPage: {
+            let releasesURL = URL(string: "https://github.com/kcin1107/Cleankey/releases/latest")!
+            NSWorkspace.shared.open(releasesURL)
+        }
+    )
+
+    private static func version(from data: Data, response: URLResponse) throws -> String {
+        guard let response = response as? HTTPURLResponse,
+              (200...299).contains(response.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+
+        let tag = try JSONDecoder().decode(GitHubRelease.self, from: data).tagName
+        return tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+    }
+}
+
 /// Compares the running version against the latest GitHub release. Deliberately
 /// installs nothing: the user downloads and replaces the app. That keeps Cleankey
 /// free of an update framework, its XPC services, and their signing requirements.
 ///
 /// The row's label *is* the state, so there is no separate status line, and the
 /// button always performs the sensible next action for that state.
-final class UpdateChecker: ObservableObject {
-    enum State {
+@Observable
+final class UpdateChecker {
+    enum State: Equatable {
         case idle
         case checking
         case upToDate
@@ -278,10 +311,13 @@ final class UpdateChecker: ObservableObject {
         case failed
     }
 
-    @Published private(set) var state: State = .idle
+    private(set) var state: State = .idle
 
-    private let apiURL = URL(string: "https://api.github.com/repos/kcin1107/Cleankey/releases/latest")!
-    private static let releasesURL = URL(string: "https://github.com/kcin1107/Cleankey/releases/latest")!
+    private let dependencies: UpdateCheckerDependencies
+
+    init(dependencies: UpdateCheckerDependencies = .live) {
+        self.dependencies = dependencies
+    }
 
     var title: String {
         switch state {
@@ -314,9 +350,9 @@ final class UpdateChecker: ObservableObject {
     /// up-to-date and failed states double as a retry.
     func act() {
         if case .available = state {
-            NSWorkspace.shared.open(Self.releasesURL)
+            dependencies.openReleasesPage()
         } else {
-            check()
+            Task { await check() }
         }
     }
 
@@ -325,34 +361,30 @@ final class UpdateChecker: ObservableObject {
         if !isChecking { state = .idle }
     }
 
-    private func check() {
+    /// Checks once and returns after the state is updated, allowing deterministic tests.
+    func check() async {
         guard !isChecking else { return }
         state = .checking
 
-        Task {
-            do {
-                var request = URLRequest(url: apiURL)
-                request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-                let (data, _) = try await URLSession.shared.data(for: request)
-                let tag = try JSONDecoder().decode(GitHubRelease.self, from: data).tagName
-                let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+        do {
+            let latest = try await dependencies.fetchLatestVersion()
 
-                // Numeric compare so 1.10 sorts above 1.9.
-                state = latest.compare(appVersion, options: .numeric) == .orderedDescending
-                    ? .available(latest)
-                    : .upToDate
-            } catch {
-                state = .failed
-            }
+            // Numeric compare so 1.10 sorts above 1.9.
+            state = latest.compare(dependencies.currentVersion, options: .numeric) == .orderedDescending
+                ? .available(latest)
+                : .upToDate
+        } catch {
+            state = .failed
         }
     }
 }
 
 /// Wraps `SMAppService.mainApp` so the menu can show and change whether Cleankey
 /// launches at login.
-final class LoginItem: ObservableObject {
-    @Published private(set) var isEnabled = false
-    @Published private(set) var message: String?
+@Observable
+final class LoginItem {
+    private(set) var isEnabled = false
+    private(set) var message: String?
 
     init() { refresh() }
 
@@ -399,22 +431,23 @@ final class LoginItem: ObservableObject {
     }
 }
 
-final class KeyboardBlocker: ObservableObject {
+@Observable
+final class KeyboardBlocker {
     /// Owned here rather than written by the view: it turns true only once the tap is
     /// installed, so the switch can never show a lock that isn't actually in effect.
-    @Published private(set) var isBlocking: Bool = false
+    private(set) var isBlocking: Bool = false
 
     /// Set when the event tap could not be created, so the menu can explain why the
     /// switch stayed off instead of leaving the user guessing.
-    @Published private(set) var failureMessage: String?
+    private(set) var failureMessage: String?
 
     /// Live preflight results shown beside the System Settings shortcuts.
-    @Published private(set) var hasAccessibilityPermission = AXIsProcessTrusted()
-    @Published private(set) var hasInputMonitoringPermission = CGPreflightListenEventAccess()
+    private(set) var hasAccessibilityPermission = AXIsProcessTrusted()
+    private(set) var hasInputMonitoringPermission = CGPreflightListenEventAccess()
 
     // Event tap state
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    @ObservationIgnored private var eventTap: CFMachPort?
+    @ObservationIgnored private var runLoopSource: CFRunLoopSource?
 
     // MARK: - Public control
 

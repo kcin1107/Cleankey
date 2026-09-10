@@ -10,11 +10,11 @@ Wiping down a Mac keyboard normally fires off a storm of keystrokes. Apps open, 
 Cleankey installs a system-wide event tap at the HID level and catches key events before they reach any app. While blocking is active, Cleankey drops every keystroke, including modifier keys and media keys like play/pause and volume. Toggle it off and everything returns to normal. Your trackpad keeps working all the time, so you can easily enable your keyboard again.
 
 ### Two permissions on system-level are required for the application to work:
-- **Device Control and Data Acces** (called **Accessibility** on macOS 26 and earlier) lets Cleankey suppress all key events
+- **Device Control and Data Access** (called **Accessibility** on macOS 26 and earlier) lets Cleankey suppress all key events
 - **Input Monitoring** lets Cleankey receive the key events
 
 ### Requirements
-- macOS 13.0 (Ventura) or later
+- macOS 14.0 (Sonoma) or later
 - Works on Apple Silicon and Intel Macs
 
 ### Languages
@@ -25,6 +25,10 @@ Two options:
 1. Download the .zip archive from the "Releases" section here and drop `Cleankey.app` into `/Applications` (or wherever you want).
 2. Download the whole repository, build the project in Xcode and drop `Cleankey.app` into your `/Applications` folder.
 
+### Testing
+Run the `Cleankey` scheme's tests in Xcode with Product → Test. The unit tests use
+injected update-checking dependencies, so they don't contact GitHub or open a browser.
+
 ### FAQ
 
 #### How do I unlock my keyboard again?
@@ -34,6 +38,6 @@ Click the Cleankey icon in the menu bar and flip the toggle off. Your mouse and 
 No. Cleankey throws key events away while the lock is on. It never reads them, saves them or sends them anywhere, and it does nothing at all while the lock is off.
 
 #### The toggle cannot be toggled. What is wrong?
-You did not grant both permissions yet, so Cleankey cannot activate it's keyboard lock. The menu tells you which one is missing. Grant it, then quit Cleankey and open it again, because macOS applies new permissions only on a fresh launch.
+You did not grant both permissions yet, so Cleankey cannot activate its keyboard lock. The menu tells you which one is missing. Grant it, then quit Cleankey and open it again, because macOS applies new permissions only on a fresh launch.
 
 Made by [Nick Ringelmann](https://nickringelmann.com)
