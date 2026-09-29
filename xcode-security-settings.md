@@ -11,7 +11,7 @@ Security build-setting decisions for Cleankey.
 - `com.apple.security.hardened-process.hardened-heap = true`: Enables heap type isolation.
 - `com.apple.security.hardened-process.dyld-ro = true`: Protects dynamic-loader state as read-only.
 - `com.apple.security.hardened-process.platform-restrictions-string = 2`: Enables dynamic-loader and Mach-message platform restrictions.
-- `ENABLE_POINTER_AUTHENTICATION = NO` on `CleankeyTests`: The hosted test bundle must consume the app's standard arm64 Swift module. The shipping app retains pointer authentication.
+- Pointer authentication stays on for `CleankeyTests` too: the hosted test bundle must be `arm64e` to load into the Enhanced Security app.
 
 ## Disabled settings
 
