@@ -75,7 +75,7 @@ private enum SystemSettingsOpener {
 private struct ToggleRow: View {
     let title: LocalizedStringKey
     let isOn: Bool
-    let set: (Bool) -> Void
+    let set: @MainActor @Sendable (Bool) -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -170,7 +170,7 @@ private extension View {
 struct CleankeyApp: App {
     @State private var blocker = KeyboardBlocker()
     @State private var loginItem = LoginItem()
-    @State private var updates = UpdateChecker()
+    @State private var updates = UpdateChecker(dependencies: .live)
 
     var body: some Scene {
         MenuBarExtra("Cleankey", systemImage: blocker.isBlocking ? "keyboard.fill" : "keyboard") {
@@ -269,15 +269,17 @@ struct UpdateCheckerDependencies {
     let fetchLatestVersion: () async throws -> String
     let openReleasesPage: () -> Void
 
+    private static func fetchLatestVersion() async throws -> String {
+        let apiURL = URL(string: "https://api.github.com/repos/kcin1107/Cleankey/releases/latest")!
+        var request = URLRequest(url: apiURL)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        return try version(from: data, response: response)
+    }
+
     static let live = UpdateCheckerDependencies(
         currentVersion: appVersion,
-        fetchLatestVersion: {
-            let apiURL = URL(string: "https://api.github.com/repos/kcin1107/Cleankey/releases/latest")!
-            var request = URLRequest(url: apiURL)
-            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-            let (data, response) = try await URLSession.shared.data(for: request)
-            return try UpdateCheckerDependencies.version(from: data, response: response)
-        },
+        fetchLatestVersion: fetchLatestVersion,
         openReleasesPage: {
             let releasesURL = URL(string: "https://github.com/kcin1107/Cleankey/releases/latest")!
             NSWorkspace.shared.open(releasesURL)
@@ -315,7 +317,7 @@ final class UpdateChecker {
 
     private let dependencies: UpdateCheckerDependencies
 
-    init(dependencies: UpdateCheckerDependencies = .live) {
+    init(dependencies: UpdateCheckerDependencies) {
         self.dependencies = dependencies
     }
 
@@ -446,8 +448,8 @@ final class KeyboardBlocker {
     private(set) var hasInputMonitoringPermission = CGPreflightListenEventAccess()
 
     // Event tap state
-    @ObservationIgnored private var eventTap: CFMachPort?
-    @ObservationIgnored private var runLoopSource: CFRunLoopSource?
+    @ObservationIgnored nonisolated(unsafe) private var eventTap: CFMachPort?
+    @ObservationIgnored nonisolated(unsafe) private var runLoopSource: CFRunLoopSource?
 
     // MARK: - Public control
 
@@ -523,7 +525,7 @@ final class KeyboardBlocker {
     }
 
     /// Tears the tap down without touching published state, so `deinit` can reuse it.
-    private func teardownTap() {
+    nonisolated private func teardownTap() {
         if let source = runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
         }
@@ -574,7 +576,7 @@ final class KeyboardBlocker {
     /// only after the app is relaunched.
     func requestPermissionsIfNeeded() {
         if !AXIsProcessTrusted() {
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
             _ = AXIsProcessTrustedWithOptions(options)
         }
         if !CGPreflightListenEventAccess() {
