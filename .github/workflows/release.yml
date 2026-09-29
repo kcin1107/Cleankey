@@ -1,13 +1,12 @@
 name: Release
 
-# Tagging v* builds, signs, notarizes and publishes the app. Mirrors the five-step
-# local release procedure in STRUCTURE.md, a maintainer note kept outside the repo.
-# A v* tag builds and publishes. A manual run does everything except publish,
-# so the signing and notarization path can be rehearsed without shipping.
+# Manual only. Releases are built locally, following the five-step release
+# procedure in STRUCTURE.md, a maintainer note kept outside the repo, and uploaded
+# with gh. A tag push no longer triggers this workflow, so it cannot replace a
+# locally built release zip. Run it by hand to rehearse the signing and
+# notarization path: it does everything except publish. It publishes only if
+# started on a v* tag ref.
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
