@@ -1,0 +1,26 @@
+{
+  "fill" : {
+    "linear-gradient" : [ "srgb:0.87843,0.78039,0.61176,1.00000", "srgb:0.72157,0.58431,0.36863,1.00000" ],
+    "orientation" : { "start" : { "x" : 0.5, "y" : 0 }, "stop" : { "x" : 0.5, "y" : 1 } }
+  },
+  "fill-specializations" : [
+    { "appearance" : "dark", "value" : { "solid" : "srgb:0.16471,0.13333,0.08627,1.00000" } }
+  ],
+  "groups" : [
+    {
+      "layers" : [
+        { "image-name" : "broom.svg", "name" : "Broom", "glass" : true }
+      ],
+      "shadow" : { "kind" : "neutral", "opacity" : 0.5 },
+      "translucency" : { "enabled" : true, "value" : 0.4 }
+    },
+    {
+      "layers" : [
+        { "image-name" : "lines.svg", "name" : "Speed Lines", "glass" : true, "opacity" : 0.85 }
+      ],
+      "shadow" : { "kind" : "neutral", "opacity" : 0.4 },
+      "translucency" : { "enabled" : true, "value" : 0.5 }
+    }
+  ],
+  "supported-platforms" : { "squares" : "shared" }
+}
