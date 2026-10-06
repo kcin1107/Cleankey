@@ -1,3 +1,5 @@
+<img src="CleankeyIcon.png" width="128" height="128" alt="Cleankey app icon, a broom with speed lines">
+
 ### Cleankey: Keyboard Cleaning Made Easy
 Cleankey is a tiny, free macOS menu bar app that temporarily locks your keyboard so you can wipe down the keys without triggering accidental keystrokes. Flip the toggle to clean off your greasy fingers from your keyboard and be happy.
 
